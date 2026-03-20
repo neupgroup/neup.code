@@ -1,5 +1,35 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Prisma + PostgreSQL
+
+This project is now scaffolded for Prisma 7 with PostgreSQL.
+
+1. Add your connection string to `.env` or `.env.local`:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/neup_code?schema=public"
+```
+
+2. Generate the client if needed:
+
+```bash
+npm run db:generate
+```
+
+3. After you add models to `prisma/schema.prisma`, create your first migration:
+
+```bash
+npm run db:migrate -- --name init
+```
+
+4. Open Prisma Studio when you want to inspect the database:
+
+```bash
+npm run db:studio
+```
+
+The app-side Prisma singleton lives in `src/lib/prisma.ts`, and the generated client is emitted to `src/generated/prisma`.
+
 ## Getting Started
 
 First, run the development server:
@@ -16,7 +46,7 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+You can start editing the page by modifying `src/app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
