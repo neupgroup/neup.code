@@ -15,6 +15,14 @@ type OnboardingState = {
   started?: boolean;
 };
 
+type ExportManifest = {
+  version: 1;
+  generatedAt: string;
+  onboarding: OnboardingState;
+  bridges: BridgeItem[];
+  components: ComponentItem[];
+};
+
 function formatKeyValueList(items: BridgeItem["requiredFields"]) {
   if (!items?.length) return "";
 
@@ -203,6 +211,14 @@ export function PublishExport() {
   }, []);
 
   const zipEntries = useMemo(() => {
+    const manifest: ExportManifest = {
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      onboarding,
+      bridges,
+      components,
+    };
+
     const componentFiles = components.map((component, index) => {
       const baseName = formatFileName(component.name, `component_${index + 1}`);
       return {
@@ -227,8 +243,9 @@ export function PublishExport() {
       ...componentFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
       ...bridgeFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
       { name: ".docs/index.md", content: indexContent },
+      { name: ".docs/manifest.json", content: JSON.stringify(manifest, null, 2) },
     ];
-  }, [bridges, components]);
+  }, [bridges, components, onboarding]);
 
   function downloadMarkdown() {
     const zipBytes = buildZip(zipEntries);

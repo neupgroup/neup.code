@@ -10,6 +10,7 @@ import {
   deleteBridgeRun,
   loadBridgeRuns,
   loadBridges,
+  saveBridges,
   saveBridgeRuns,
   type BridgeKeyValueItem,
   type BridgeItem,
@@ -17,9 +18,41 @@ import {
 } from "../bridge-storage";
 import { normalizeRichTextHtml, richTextHasContent } from "../rich-text";
 
+function createId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function bridgeTypeLabel(type: BridgeItem["bridgeType"]) {
   if (type === "grpc") return "gRPC";
   return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function duplicateKeyValueItems(items?: BridgeKeyValueItem[]) {
+  return items?.map((item) => ({
+    id: createId(),
+    key: item.key,
+    value: item.value,
+  }));
+}
+
+function duplicateBridgeItem(bridge: BridgeItem): BridgeItem {
+  return {
+    ...bridge,
+    id: createId(),
+    name: `${bridge.name} Copy`,
+    createdAt: new Date().toISOString(),
+    apiConfig: bridge.apiConfig
+      ? {
+          ...bridge.apiConfig,
+          headers: duplicateKeyValueItems(bridge.apiConfig.headers) ?? [],
+          queryParams: duplicateKeyValueItems(bridge.apiConfig.queryParams) ?? [],
+          formData: duplicateKeyValueItems(bridge.apiConfig.formData) ?? [],
+        }
+      : undefined,
+    requiredFields: duplicateKeyValueItems(bridge.requiredFields),
+  };
 }
 
 function buildRunOutput(bridge: BridgeItem) {
@@ -92,6 +125,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   const [bridge, setBridge] = useState<BridgeItem | null>(null);
   const [ready, setReady] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState(false);
   const [runRecord, setRunRecord] = useState<BridgeRunRecord>({
     bridgeId: id,
     status: "idle",
@@ -275,6 +309,17 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     deleteBridge(bridge.id);
     deleteBridgeRun(bridge.id);
     router.push("/bridge");
+    router.refresh();
+  }
+
+  function duplicateBridge() {
+    if (!bridge || isDuplicating) return;
+
+    setIsDuplicating(true);
+    const allBridges = loadBridges();
+    const duplicatedBridge = duplicateBridgeItem(bridge);
+    saveBridges([duplicatedBridge, ...allBridges]);
+    router.push(`/bridge/${duplicatedBridge.id}/edit`);
     router.refresh();
   }
 
@@ -599,6 +644,14 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
           >
             Edit bridge
           </Link>
+          <button
+            type="button"
+            onClick={duplicateBridge}
+            disabled={isDuplicating}
+            className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted disabled:opacity-60"
+          >
+            {isDuplicating ? "Duplicating..." : "Duplicate bridge"}
+          </button>
           <button
             type="button"
             onClick={removeBridge}

@@ -58,6 +58,44 @@ export type ZipEntry = {
   content: string;
 };
 
+export function readZip(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const decoder = new TextDecoder();
+  const entries: ZipEntry[] = [];
+  let offset = 0;
+
+  while (offset + 4 <= bytes.length) {
+    const signature = view.getUint32(offset, true);
+    if (signature !== 0x04034b50) break;
+
+    const compressionMethod = view.getUint16(offset + 8, true);
+    if (compressionMethod !== 0) {
+      throw new Error("This zip uses compression that Neup.Code import does not support.");
+    }
+
+    const compressedSize = view.getUint32(offset + 18, true);
+    const fileNameLength = view.getUint16(offset + 26, true);
+    const extraLength = view.getUint16(offset + 28, true);
+    const fileNameStart = offset + 30;
+    const fileNameEnd = fileNameStart + fileNameLength;
+    const contentStart = fileNameEnd + extraLength;
+    const contentEnd = contentStart + compressedSize;
+
+    if (contentEnd > bytes.length) {
+      throw new Error("The uploaded zip appears to be corrupted.");
+    }
+
+    const name = decoder.decode(bytes.slice(fileNameStart, fileNameEnd));
+    const content = decoder.decode(bytes.slice(contentStart, contentEnd));
+    entries.push({ name, content });
+
+    offset = contentEnd;
+  }
+
+  return entries;
+}
+
 export function buildZip(entries: ZipEntry[]) {
   const encoder = new TextEncoder();
   const now = getDosDateTime(new Date());
