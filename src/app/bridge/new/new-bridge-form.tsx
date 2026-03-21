@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   loadBridges,
   saveBridges,
@@ -126,11 +126,46 @@ const INITIAL_STATE: NewBridgeFormState = {
   notes: "",
 };
 
-export function NewBridgeForm() {
+function bridgeToFormState(bridge: BridgeItem): NewBridgeFormState {
+  return {
+    name: bridge.name,
+    bridgeType: bridge.bridgeType,
+    endpoint: bridge.endpoint,
+    environment: bridge.environment,
+    method: bridge.method ?? "POST",
+    apiHeaders: bridge.apiConfig?.headers ?? [],
+    apiQueryParams: bridge.apiConfig?.queryParams ?? [],
+    apiFormData: bridge.apiConfig?.formData ?? [],
+    apiBodyType: bridge.apiConfig?.bodyType ?? "none",
+    apiBody: bridge.apiConfig?.body ?? "",
+    serviceName: bridge.serviceName ?? "",
+    secret: bridge.secret ?? "",
+    notes: bridge.notes ?? "",
+  };
+}
+
+type NewBridgeFormProps = {
+  mode?: "create" | "edit";
+  bridge?: BridgeItem | null;
+};
+
+export function NewBridgeForm({
+  mode = "create",
+  bridge = null,
+}: NewBridgeFormProps) {
   const router = useRouter();
-  const [form, setForm] = useState<NewBridgeFormState>(INITIAL_STATE);
+  const [form, setForm] = useState<NewBridgeFormState>(() =>
+    bridge ? bridgeToFormState(bridge) : INITIAL_STATE,
+  );
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (mode === "edit" && bridge) {
+      setForm(bridgeToFormState(bridge));
+      setErrors({});
+    }
+  }, [bridge, mode]);
 
   function updateField<K extends keyof NewBridgeFormState>(
     field: K,
@@ -207,12 +242,12 @@ export function NewBridgeForm() {
 
   function buildBridgeItem(): BridgeItem {
     const item: BridgeItem = {
-      id: createId(),
+      id: bridge?.id ?? createId(),
       name: form.name.trim(),
       bridgeType: form.bridgeType,
       endpoint: form.endpoint.trim(),
       environment: form.environment,
-      createdAt: new Date().toISOString(),
+      createdAt: bridge?.createdAt ?? new Date().toISOString(),
     };
 
     if (form.bridgeType === "api") {
@@ -249,21 +284,38 @@ export function NewBridgeForm() {
 
     const existing = loadBridges();
     const item = buildBridgeItem();
-    saveBridges([item, ...existing]);
+    const nextItems =
+      mode === "edit"
+        ? existing.map((existingItem) => (existingItem.id === item.id ? item : existingItem))
+        : [item, ...existing];
 
-    router.push("/bridge");
+    saveBridges(nextItems);
+
+    router.push(mode === "edit" ? `/bridge/${item.id}` : "/bridge");
     router.refresh();
   }
+
+  const isEditMode = mode === "edit";
+  const heading = isEditMode ? "Edit bridge" : "Create new bridge";
+  const description = isEditMode
+    ? "Update the saved bridge settings. Changes stay in your browser locally."
+    : "Fill the essential details and save. This is stored in your browser locally.";
+  const submitLabel = isSaving
+    ? isEditMode
+      ? "Saving changes..."
+      : "Saving..."
+    : isEditMode
+      ? "Save changes"
+      : "Save bridge";
+  const cancelHref = isEditMode && bridge ? `/bridge/${bridge.id}` : "/bridge";
 
   return (
     <section className="rounded-[1.1rem] border border-border bg-card p-6">
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         Bridge
       </p>
-      <h1 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.02em]">Create new bridge</h1>
-      <p className="mt-1 text-[0.88rem] text-muted-foreground">
-        Fill the essential details and save. This is stored in your browser locally.
-      </p>
+      <h1 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.02em]">{heading}</h1>
+      <p className="mt-1 text-[0.88rem] text-muted-foreground">{description}</p>
 
       <form className="mt-5 grid gap-4" onSubmit={saveBridge}>
         <label className="grid gap-1.5">
@@ -483,10 +535,10 @@ export function NewBridgeForm() {
             disabled={isSaving}
             className="inline-flex rounded-full bg-primary px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
           >
-            {isSaving ? "Saving..." : "Save bridge"}
+            {submitLabel}
           </button>
           <Link
-            href="/bridge"
+            href={cancelHref}
             className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-foreground transition hover:bg-muted"
           >
             Cancel

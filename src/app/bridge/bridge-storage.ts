@@ -29,6 +29,22 @@ export type BridgeItem = {
 };
 
 export const BRIDGE_STORAGE_KEY = "neup.code.bridge.items.v1";
+export const BRIDGE_RUN_STORAGE_KEY = "neup.code.bridge.runs.v1";
+
+export type BridgeRunRecord = {
+  bridgeId: string;
+  status: "idle" | "running" | "success" | "error";
+  lastRunAt?: string;
+  output?: string;
+  response?: {
+    requestUrl?: string;
+    statusCode?: number;
+    statusText?: string;
+    headers?: BridgeKeyValueItem[];
+    body?: string;
+    durationMs?: number;
+  };
+};
 
 function isBridgeType(value: string): value is BridgeType {
   return value === "api" || value === "webhook" || value === "grpc" || value === "handshake";
@@ -68,4 +84,37 @@ export function loadBridges(): BridgeItem[] {
 export function saveBridges(items: BridgeItem[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(BRIDGE_STORAGE_KEY, JSON.stringify(items));
+}
+
+export function loadBridgeRuns(): Record<string, BridgeRunRecord> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(BRIDGE_RUN_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, value]) => {
+        if (!value || typeof value !== "object") return false;
+        const record = value as Partial<BridgeRunRecord>;
+        return (
+          typeof record.bridgeId === "string" &&
+          (record.status === "idle" ||
+            record.status === "running" ||
+            record.status === "success" ||
+            record.status === "error")
+        );
+      }),
+    ) as Record<string, BridgeRunRecord>;
+  } catch {
+    return {};
+  }
+}
+
+export function saveBridgeRuns(items: Record<string, BridgeRunRecord>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(BRIDGE_RUN_STORAGE_KEY, JSON.stringify(items));
 }

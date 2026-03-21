@@ -42,13 +42,13 @@ export default function RootLayout({
             </div>
           </header>
 
-          <div className="content-container overflow-x-auto">
-            <div className="grid min-h-[calc(100vh-68px)] min-w-[980px] grid-cols-[242px_minmax(0,1fr)]">
-              <aside className="h-[calc(100vh-68px)] overflow-y-auto border-r border-border bg-background px-4 py-6">
+          <div className="content-container">
+            <div className="grid min-w-[980px] grid-cols-[242px_minmax(0,1fr)]">
+              <aside className="sticky top-[68px] h-[calc(100vh-68px)] self-start overflow-y-auto border-r border-border bg-background px-4 py-6">
                 <SidebarNav />
               </aside>
 
-              <main className="h-[calc(100vh-68px)] overflow-y-auto bg-background px-6 py-7 lg:px-9 lg:py-8">
+              <main className="bg-background px-6 py-7 lg:px-9 lg:py-8">
                 {children}
               </main>
             </div>

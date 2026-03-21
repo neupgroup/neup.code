@@ -64,19 +64,31 @@ export function BridgeList() {
         ) : (
           <div className="grid gap-3">
             {bridges.map((bridge) => (
-              <article
+              <div
                 key={bridge.id}
-                className="rounded-lg border border-border bg-background px-4 py-3"
+                className="rounded-lg border border-border bg-background px-4 py-3 transition hover:border-foreground/15 hover:bg-muted/25"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-[1rem] font-semibold">{bridge.name}</h2>
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[0.67rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    {bridgeTypeLabel(bridge.bridgeType)}
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Link href={`/bridge/${bridge.id}`} className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-[1rem] font-semibold">{bridge.name}</h2>
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-[0.67rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        {bridgeTypeLabel(bridge.bridgeType)}
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-[0.84rem] text-muted-foreground">
+                      {bridge.endpoint}
+                    </p>
+                  </Link>
+
+                  <Link
+                    href={`/bridge/${bridge.id}/edit`}
+                    className="inline-flex rounded-full border border-border px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
+                  >
+                    Edit bridge
+                  </Link>
                 </div>
-                <p className="mt-1 text-[0.84rem] text-muted-foreground">
-                  {bridge.endpoint}
-                </p>
+
                 <div className="mt-2 flex flex-wrap gap-2 text-[0.75rem] text-muted-foreground">
                   <span className="rounded-full border border-border px-2 py-0.5">
                     {bridge.environment}
@@ -112,7 +124,7 @@ export function BridgeList() {
                     </span>
                   ) : null}
                 </div>
-              </article>
+              </div>
             ))}
           </div>
         )}
