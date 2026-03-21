@@ -17,6 +17,12 @@ import {
   type BridgeRunRecord,
 } from "../bridge-storage";
 import { normalizeRichTextHtml, richTextHasContent } from "../rich-text";
+import {
+  BRIDGE_SESSION_STORAGE_KEY,
+  clearBridgeClipboard,
+  loadBridgeSessionState,
+  type BridgeSessionClipboard,
+} from "../session-manager";
 
 function createId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -27,6 +33,12 @@ function createId() {
 function bridgeTypeLabel(type: BridgeItem["bridgeType"]) {
   if (type === "grpc") return "gRPC";
   return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function bridgeEntryKindLabel(kind: BridgeItem["entryKind"]) {
+  if (kind === "chapter") return "Chapter";
+  if (kind === "note") return "Note";
+  return "Bridge";
 }
 
 function duplicateKeyValueItems(items?: BridgeKeyValueItem[]) {
@@ -43,6 +55,7 @@ function duplicateBridgeItem(bridge: BridgeItem): BridgeItem {
     id: createId(),
     name: `${bridge.name} Copy`,
     createdAt: new Date().toISOString(),
+    chapterBlockIds: [],
     apiConfig: bridge.apiConfig
       ? {
           ...bridge.apiConfig,
@@ -127,11 +140,15 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [clipboard, setClipboard] = useState<BridgeSessionClipboard | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [pasteMessage, setPasteMessage] = useState<string | null>(null);
   const [runRecord, setRunRecord] = useState<BridgeRunRecord>({
     bridgeId: id,
     status: "idle",
   });
   const hasRunActivity = runRecord.status !== "idle";
+  const isBridgeEntry = (bridge?.entryKind ?? "bridge") === "bridge";
   const apiHeaders = bridge?.apiConfig ? cleanKeyValueItems(bridge.apiConfig.headers) : [];
   const apiQueryParams = bridge?.apiConfig ? cleanKeyValueItems(bridge.apiConfig.queryParams) : [];
   const apiFormData = bridge?.apiConfig ? cleanKeyValueItems(bridge.apiConfig.formData) : [];
@@ -145,6 +162,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     const allBridges = loadBridges();
     const foundBridge = allBridges.find((item) => item.id === id) ?? null;
     setBridge(foundBridge);
+    setClipboard(loadBridgeSessionState().clipboard ?? null);
 
     const runMap = loadBridgeRuns();
     setRunRecord(runMap[id] ?? { bridgeId: id, status: "idle" });
@@ -162,11 +180,37 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
         const runMap = loadBridgeRuns();
         setRunRecord(runMap[id] ?? { bridgeId: id, status: "idle" });
       }
+
+      if (event.key === BRIDGE_SESSION_STORAGE_KEY) {
+        setClipboard(loadBridgeSessionState().clipboard ?? null);
+      }
     }
 
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [id]);
+
+  useEffect(() => {
+    function closeMenus() {
+      setContextMenu(null);
+    }
+
+    function onEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeMenus();
+      }
+    }
+
+    window.addEventListener("click", closeMenus);
+    window.addEventListener("scroll", closeMenus, true);
+    window.addEventListener("keydown", onEscape);
+
+    return () => {
+      window.removeEventListener("click", closeMenus);
+      window.removeEventListener("scroll", closeMenus, true);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, []);
 
   async function runBridge() {
     if (!bridge) return;
@@ -319,6 +363,36 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     router.refresh();
   }
 
+  function pasteIntoChapter() {
+    if (!bridge || bridge.entryKind !== "chapter" || !clipboard?.items.length) return;
+
+    const clipboardIds = clipboard.items
+      .map((item) => item.id)
+      .filter((clipboardId) => clipboardId !== bridge.id);
+
+    const allBridges = loadBridges();
+    const nextBridges = allBridges.map((item) =>
+      clipboardIds.includes(item.id)
+        ? {
+            ...item,
+            parentChapterId: bridge.id,
+          }
+        : item,
+    );
+
+    saveBridges(nextBridges);
+    setBridge(nextBridges.find((item) => item.id === bridge.id) ?? bridge);
+    clearBridgeClipboard();
+    setClipboard(null);
+    setContextMenu(null);
+    setPasteMessage(
+      clipboard.items.length === 1
+        ? `${clipboard.items[0]?.name ?? "Item"} pasted into ${bridge.name}.`
+        : `${clipboard.items.length} items pasted into ${bridge.name}.`,
+    );
+    window.setTimeout(() => setPasteMessage(null), 2200);
+  }
+
   if (!ready) {
     return (
       <section>
@@ -349,6 +423,11 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     );
   }
 
+  const chapterBlocks =
+    bridge.entryKind === "chapter"
+      ? loadBridges().filter((item) => item.parentChapterId === bridge.id)
+      : [];
+
   return (
     <section className="space-y-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -364,46 +443,134 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
               <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em]">
                 {bridge.name}
               </h1>
-              <button
-                type="button"
-                onClick={runBridge}
-                disabled={runRecord.status === "running"}
-                aria-label="Run bridge"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
-              >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4 fill-current"
+              {isBridgeEntry ? (
+                <button
+                  type="button"
+                  onClick={runBridge}
+                  disabled={runRecord.status === "running"}
+                  aria-label="Run bridge"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
                 >
-                  <path d="M8 6.5v11l9-5.5-9-5.5Z" />
-                </svg>
-              </button>
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4 fill-current"
+                  >
+                    <path d="M8 6.5v11l9-5.5-9-5.5Z" />
+                  </svg>
+                </button>
+              ) : null}
             </div>
-            <p className="mt-1 text-[0.88rem] text-muted-foreground">{bridge.endpoint}</p>
+            {isBridgeEntry ? (
+              <p className="mt-1 text-[0.88rem] text-muted-foreground">{bridge.endpoint}</p>
+            ) : null}
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2 text-[0.75rem] text-muted-foreground">
           <span className="rounded-full border border-border px-2 py-0.5">
-            {bridgeTypeLabel(bridge.bridgeType)}
+            {bridgeEntryKindLabel(bridge.entryKind)}
           </span>
-          <span className="rounded-full border border-border px-2 py-0.5">
-            {bridge.environment}
-          </span>
-          {bridge.method ? (
+          {isBridgeEntry ? (
+            <span className="rounded-full border border-border px-2 py-0.5">
+              {bridgeTypeLabel(bridge.bridgeType)}
+            </span>
+          ) : null}
+          {isBridgeEntry ? (
+            <span className="rounded-full border border-border px-2 py-0.5">
+              {bridge.environment}
+            </span>
+          ) : null}
+          {isBridgeEntry && bridge.method ? (
             <span className="rounded-full border border-border px-2 py-0.5">
               {bridge.method}
             </span>
           ) : null}
-          {bridge.serviceName ? (
+          {isBridgeEntry && bridge.serviceName ? (
             <span className="rounded-full border border-border px-2 py-0.5">
               {bridge.serviceName}
             </span>
           ) : null}
         </div>
 
-        {bridge.apiConfig ? (
+        {!isBridgeEntry && richTextHasContent(normalizedPublicNote) ? (
+          <div
+            className="pt-2"
+            onContextMenu={(event) => {
+              if (bridge.entryKind !== "chapter") return;
+              event.preventDefault();
+              setContextMenu({ x: event.clientX, y: event.clientY });
+            }}
+          >
+            <h2 className="text-[1.1rem] font-semibold tracking-[-0.01em]">Content</h2>
+            <div
+              className="mt-2 prose prose-sm max-w-none text-[0.88rem] text-foreground"
+              dangerouslySetInnerHTML={{ __html: normalizedPublicNote }}
+            />
+          </div>
+        ) : null}
+
+        {bridge.entryKind === "chapter" ? (
+          <div
+            className="grid gap-3 pt-4"
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setContextMenu({ x: event.clientX, y: event.clientY });
+            }}
+          >
+            {pasteMessage ? (
+              <p className="text-[0.84rem] text-muted-foreground">{pasteMessage}</p>
+            ) : null}
+
+            <Link
+              href={`/bridge/add?chapter=${bridge.id}`}
+              className="block rounded-xl border border-border bg-background p-4 transition hover:border-foreground/20"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[0.84rem] font-semibold text-foreground">Add a bridge</p>
+                  <p className="mt-1 text-[0.84rem] text-muted-foreground">
+                    Create a new bridge connection and configure its request flow.
+                  </p>
+                </div>
+                <span className="pt-0.5 text-[1rem] leading-none text-muted-foreground">+</span>
+              </div>
+            </Link>
+
+            {chapterBlocks.length ? (
+              <div className="grid gap-3">
+                {chapterBlocks.map((block) => (
+                  <Link
+                    key={block.id}
+                    href={`/bridge/${block.id}`}
+                    className="rounded-xl border border-border bg-background px-4 py-3 transition hover:border-foreground/15"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[0.94rem] font-semibold text-foreground">{block.name}</p>
+                      <span className="rounded-full border border-border px-2 py-0.5 text-[0.67rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        {bridgeEntryKindLabel(block.entryKind)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[0.84rem] text-muted-foreground">
+                      {block.entryKind === "bridge"
+                        ? block.endpoint
+                        : normalizeRichTextHtml(block.publicNote ?? block.notes ?? "")
+                            .replace(/<[^>]+>/g, " ")
+                            .replace(/\s+/g, " ")
+                            .trim() || `${bridgeEntryKindLabel(block.entryKind)} content`}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[0.84rem] text-muted-foreground">
+                No blocks here yet.
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {isBridgeEntry && bridge.apiConfig ? (
           <div className="grid gap-3 pt-2">
             <h2 className="text-[1.1rem] font-semibold tracking-[-0.01em]">
               API configuration
@@ -495,7 +662,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
           </div>
         ) : null}
 
-        {!bridge.apiConfig && (bridge.serviceName || bridge.secret || requiredFields.length) ? (
+        {isBridgeEntry && !bridge.apiConfig && (bridge.serviceName || bridge.secret || requiredFields.length) ? (
           <div className="grid gap-3 pt-2">
             <h2 className="text-[1.1rem] font-semibold tracking-[-0.01em]">
               Bridge configuration
@@ -537,7 +704,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
             </div>
           </div>
         ) : null}
-        {richTextHasContent(normalizedPrivateNote) ? (
+        {isBridgeEntry && richTextHasContent(normalizedPrivateNote) ? (
           <div className="pt-2">
             <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Private note
@@ -549,7 +716,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
           </div>
         ) : null}
 
-        {richTextHasContent(normalizedPublicNote) ? (
+        {isBridgeEntry && richTextHasContent(normalizedPublicNote) ? (
           <div className="pt-2">
             <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Public note
@@ -560,7 +727,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
             />
           </div>
         ) : null}
-        {hasRunActivity ? (
+        {isBridgeEntry && hasRunActivity ? (
           <div className="space-y-5 pt-4">
             <div>
               <h2 className="text-[1.1rem] font-semibold tracking-[-0.01em]">Response</h2>
@@ -691,6 +858,27 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
                 </button>
               </div>
             </div>
+          </div>
+        ) : null}
+
+        {contextMenu && bridge.entryKind === "chapter" ? (
+          <div
+            className="fixed z-50 min-w-[180px] rounded-xl border border-border bg-background p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={pasteIntoChapter}
+              disabled={!clipboard?.items.length}
+              className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {clipboard?.items.length
+                ? clipboard.items.length === 1
+                  ? `Paste ${clipboard.items[0]?.name ?? "block"}`
+                  : `Paste ${clipboard.items.length} blocks`
+                : "Paste"}
+            </button>
           </div>
         ) : null}
       </section>

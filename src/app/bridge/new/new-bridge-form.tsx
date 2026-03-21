@@ -11,6 +11,7 @@ import {
 import {
   loadBridges,
   saveBridges,
+  type BridgeEntryKind,
   type BridgeKeyValueItem,
   type BridgeItem,
   type BridgeType,
@@ -185,6 +186,7 @@ function RichTextField({ label, value, placeholder, onChange }: RichTextFieldPro
 
 type NewBridgeFormState = {
   name: string;
+  entryKind: BridgeEntryKind;
   bridgeType: BridgeType;
   isPrivateInternal: boolean;
   endpoint: string;
@@ -206,6 +208,7 @@ type FormErrors = Partial<Record<keyof NewBridgeFormState, string>>;
 
 const INITIAL_STATE: NewBridgeFormState = {
   name: "",
+  entryKind: "bridge",
   bridgeType: "api",
   isPrivateInternal: false,
   endpoint: "",
@@ -226,6 +229,7 @@ const INITIAL_STATE: NewBridgeFormState = {
 function bridgeToFormState(bridge: BridgeItem): NewBridgeFormState {
   return {
     name: bridge.name,
+    entryKind: bridge.entryKind ?? "bridge",
     bridgeType: bridge.bridgeType,
     isPrivateInternal: Boolean(bridge.isPrivateInternal),
     endpoint: bridge.endpoint,
@@ -247,11 +251,13 @@ function bridgeToFormState(bridge: BridgeItem): NewBridgeFormState {
 type NewBridgeFormProps = {
   mode?: "create" | "edit";
   bridge?: BridgeItem | null;
+  chapterQuery?: string | null;
 };
 
 export function NewBridgeForm({
   mode = "create",
   bridge = null,
+  chapterQuery = null,
 }: NewBridgeFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<NewBridgeFormState>(() =>
@@ -264,6 +270,13 @@ export function NewBridgeForm({
     () => form.apiQueryParams.length > 0,
   );
   const [showApiFormData, setShowApiFormData] = useState(() => form.apiFormData.length > 0);
+  const targetChapterId = chapterQuery && chapterQuery !== "base" ? chapterQuery : null;
+  const targetChapter =
+    mode === "create" && targetChapterId
+      ? loadBridges().find(
+          (item) => item.id === targetChapterId && (item.entryKind ?? "bridge") === "chapter",
+        ) ?? null
+      : null;
 
   useEffect(() => {
     if (mode === "edit" && bridge) {
@@ -346,23 +359,23 @@ export function NewBridgeForm({
   function validate() {
     const nextErrors: FormErrors = {};
 
-    if (!form.name.trim()) {
+    if (!(mode === "create" && form.entryKind === "note") && !form.name.trim()) {
       nextErrors.name = "Bridge name is required.";
     }
 
-    if (!form.endpoint.trim()) {
+    if (form.entryKind === "bridge" && !form.endpoint.trim()) {
       nextErrors.endpoint = "Endpoint is required.";
     }
 
-    if (form.bridgeType === "webhook" && !form.secret.trim()) {
+    if (form.entryKind === "bridge" && form.bridgeType === "webhook" && !form.secret.trim()) {
       nextErrors.secret = "Signing secret is required for webhook.";
     }
 
-    if (form.bridgeType === "grpc" && !form.serviceName.trim()) {
+    if (form.entryKind === "bridge" && form.bridgeType === "grpc" && !form.serviceName.trim()) {
       nextErrors.serviceName = "Service name is required for gRPC.";
     }
 
-    if (form.bridgeType === "handshake" && !form.secret.trim()) {
+    if (form.entryKind === "bridge" && form.bridgeType === "handshake" && !form.secret.trim()) {
       nextErrors.secret = "Handshake key is required for handshake.";
     }
 
@@ -373,15 +386,21 @@ export function NewBridgeForm({
   function buildBridgeItem(): BridgeItem {
     const item: BridgeItem = {
       id: bridge?.id ?? createId(),
-      name: form.name.trim(),
+      name:
+        mode === "create" && form.entryKind === "note"
+          ? "Untitled note"
+          : form.name.trim(),
+      entryKind: form.entryKind,
+      parentChapterId:
+        mode === "create" ? targetChapter?.id ?? null : bridge?.parentChapterId ?? null,
       bridgeType: form.bridgeType,
       isPrivateInternal: form.isPrivateInternal,
-      endpoint: form.endpoint.trim(),
+      endpoint: form.entryKind === "bridge" ? form.endpoint.trim() : "",
       environment: form.environment,
       createdAt: bridge?.createdAt ?? new Date().toISOString(),
     };
 
-    if (form.bridgeType === "api") {
+    if (form.entryKind === "bridge" && form.bridgeType === "api") {
       item.method = form.method;
       item.apiConfig = {
         headers: cleanKeyValueItems(form.apiHeaders),
@@ -392,19 +411,24 @@ export function NewBridgeForm({
       };
     }
 
-    if (form.bridgeType === "grpc") {
+    if (form.entryKind === "bridge" && form.bridgeType === "grpc") {
       item.serviceName = form.serviceName.trim();
     }
 
     if (
+      form.entryKind === "bridge" &&
       form.bridgeType === "webhook" ||
+      (form.entryKind === "bridge" &&
       form.bridgeType === "handshake" ||
-      form.bridgeType === "grpc"
+      form.bridgeType === "grpc")
     ) {
       item.requiredFields = cleanKeyValueItems(form.requiredFields);
     }
 
-    if (form.bridgeType === "webhook" || form.bridgeType === "handshake") {
+    if (
+      form.entryKind === "bridge" &&
+      (form.bridgeType === "webhook" || form.bridgeType === "handshake")
+    ) {
       item.secret = form.secret.trim();
     }
 
@@ -437,25 +461,46 @@ export function NewBridgeForm({
 
     saveBridges(nextItems);
 
-    router.push(mode === "edit" ? `/bridge/${item.id}` : "/bridge");
+    router.push(
+      mode === "edit"
+        ? `/bridge/${item.id}`
+        : targetChapter
+          ? `/bridge/${targetChapter.id}`
+          : "/bridge",
+    );
     router.refresh();
   }
 
   const isEditMode = mode === "edit";
-  const heading = isEditMode ? "Edit bridge" : "Create new bridge";
+  const isQuickCreateNote = !isEditMode && form.entryKind === "note";
   const description = isEditMode
-    ? "Update the saved bridge settings. Changes stay in your browser locally."
-    : "Fill the essential details and save. This is stored in your browser locally.";
+    ? "Update the saved entry settings. Changes stay in your browser locally."
+    : targetChapter
+      ? `Create a new block and place it inside ${targetChapter.name}.`
+    : form.entryKind === "bridge"
+      ? "Create a bridge entry and save it locally in your browser."
+      : form.entryKind === "chapter"
+        ? "Create a chapter entry like a Notion page and save it locally in your browser."
+        : "Create a note entry instantly.";
   const submitLabel = isSaving
     ? isEditMode
       ? "Saving changes..."
       : "Saving..."
     : isEditMode
       ? "Save changes"
-      : "Save bridge";
-  const cancelHref = isEditMode && bridge ? `/bridge/${bridge.id}` : "/bridge";
-  const backHref = isEditMode && bridge ? `/bridge/${bridge.id}` : "/bridge";
-  const backLabel = isEditMode ? bridge?.name ?? "Bridge" : "Bridge";
+      : form.entryKind === "bridge"
+        ? "Save bridge"
+        : form.entryKind === "chapter"
+          ? "Save chapter"
+          : "Save note";
+  const cancelHref = isEditMode && bridge ? `/bridge/${bridge.id}` : targetChapter ? `/bridge/${targetChapter.id}` : "/bridge";
+  const backHref = isEditMode && bridge ? `/bridge/${bridge.id}` : targetChapter ? `/bridge/${targetChapter.id}` : "/bridge";
+  const backLabel = isEditMode ? bridge?.name ?? "Bridge" : targetChapter?.name ?? "Bridge";
+  const entryKindOptions = [
+    { label: "Bridge", value: "bridge" },
+    { label: "Chapter", value: "chapter" },
+    { label: "Note", value: "note" },
+  ] as const;
   const bridgeTypeOptions = [
     { label: "API", value: "api" },
     { label: "Webhook", value: "webhook" },
@@ -496,7 +541,37 @@ export function NewBridgeForm({
         </Link>
         <div className="space-y-2">
           <h1 className="text-[1.65rem] font-semibold leading-[1.08] tracking-[-0.02em]">
-            {heading}
+            {isEditMode ? (
+              "Edit bridge / chapter / note"
+            ) : (
+              <>
+                <span>Create new </span>
+                {entryKindOptions.map((option, index) => {
+                  const isActive = form.entryKind === option.value;
+
+                  return (
+                    <span key={option.value}>
+                      <button
+                        type="button"
+                        onClick={() => updateField("entryKind", option.value as BridgeEntryKind)}
+                        className={`transition ${
+                          isActive
+                            ? "underline decoration-[1.5px] underline-offset-[5px]"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {option.label.toLowerCase()}
+                      </button>
+                      {index < entryKindOptions.length - 1 ? (
+                        <span className="px-1 text-muted-foreground">/</span>
+                      ) : (
+                        <span>.</span>
+                      )}
+                    </span>
+                  );
+                })}
+              </>
+            )}
           </h1>
           <p className="max-w-2xl text-[0.9rem] leading-[1.5] text-muted-foreground">
             {description}
@@ -505,56 +580,72 @@ export function NewBridgeForm({
       </div>
 
       <form className="grid gap-4 pt-1" onSubmit={saveBridge}>
-        <label className="grid gap-1.5">
-          <span className="text-[0.78rem] font-semibold text-muted-foreground">
-            Bridge name
-          </span>
-          <input
-            value={form.name}
-            onChange={(event) => updateField("name", event.target.value)}
-            className="w-full max-w-xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
-            placeholder="Primary API Bridge"
-          />
-          {errors.name ? <span className="text-[0.78rem] text-rose-600">{errors.name}</span> : null}
-        </label>
+        {!isQuickCreateNote ? (
+          <label className="grid gap-1.5">
+            <span className="text-[0.78rem] font-semibold text-muted-foreground">
+              {form.entryKind === "bridge"
+                ? "Bridge name"
+                : form.entryKind === "chapter"
+                  ? "Chapter title"
+                  : "Note title"}
+            </span>
+            <input
+              value={form.name}
+              onChange={(event) => updateField("name", event.target.value)}
+              className="w-full max-w-xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+              placeholder={
+                form.entryKind === "bridge"
+                  ? "Primary API Bridge"
+                  : form.entryKind === "chapter"
+                    ? "Architecture chapter"
+                    : "Implementation note"
+              }
+            />
+            {errors.name ? <span className="text-[0.78rem] text-rose-600">{errors.name}</span> : null}
+          </label>
+        ) : null}
 
-        <SelectionChipGroup
-          label="Bridge type"
-          options={[...bridgeTypeOptions]}
-          value={form.bridgeType}
-          onChange={(value) => updateField("bridgeType", value as BridgeType)}
-        />
+        {form.entryKind === "bridge" ? (
+          <>
+            <SelectionChipGroup
+              label="Bridge type"
+              options={[...bridgeTypeOptions]}
+              value={form.bridgeType}
+              onChange={(value) => updateField("bridgeType", value as BridgeType)}
+            />
 
-        <SelectionChipGroup
-          label="Private/internal bridge"
-          options={[...privateInternalOptions]}
-          value={form.isPrivateInternal ? "true" : "false"}
-          onChange={(value) => updateField("isPrivateInternal", value === "true")}
-        />
+            <SelectionChipGroup
+              label="Private/internal bridge"
+              options={[...privateInternalOptions]}
+              value={form.isPrivateInternal ? "true" : "false"}
+              onChange={(value) => updateField("isPrivateInternal", value === "true")}
+            />
 
-        <label className="grid gap-1.5">
-          <span className="text-[0.78rem] font-semibold text-muted-foreground">
-            Endpoint
-          </span>
-          <input
-            value={form.endpoint}
-            onChange={(event) => updateField("endpoint", event.target.value)}
-            className="w-full max-w-xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
-            placeholder="https://api.example.com/v1"
-          />
-          {errors.endpoint ? (
-            <span className="text-[0.78rem] text-rose-600">{errors.endpoint}</span>
-          ) : null}
-        </label>
+            <label className="grid gap-1.5">
+              <span className="text-[0.78rem] font-semibold text-muted-foreground">
+                Endpoint
+              </span>
+              <input
+                value={form.endpoint}
+                onChange={(event) => updateField("endpoint", event.target.value)}
+                className="w-full max-w-xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+                placeholder="https://api.example.com/v1"
+              />
+              {errors.endpoint ? (
+                <span className="text-[0.78rem] text-rose-600">{errors.endpoint}</span>
+              ) : null}
+            </label>
 
-        <SelectionChipGroup
-          label="Environment"
-          options={[...environmentOptions]}
-          value={form.environment}
-          onChange={(value) => updateField("environment", value as BridgeItem["environment"])}
-        />
+            <SelectionChipGroup
+              label="Environment"
+              options={[...environmentOptions]}
+              value={form.environment}
+              onChange={(value) => updateField("environment", value as BridgeItem["environment"])}
+            />
+          </>
+        ) : null}
 
-        {form.bridgeType === "api" ? (
+        {form.entryKind === "bridge" && form.bridgeType === "api" ? (
           <div className="grid gap-4 rounded-lg border border-border bg-muted/20 p-4">
             <p className="text-[0.78rem] font-semibold text-muted-foreground">
               API configuration
@@ -673,7 +764,7 @@ export function NewBridgeForm({
           </div>
         ) : null}
 
-        {form.bridgeType === "grpc" ? (
+        {form.entryKind === "bridge" && form.bridgeType === "grpc" ? (
           <div className="grid gap-4 rounded-lg border border-border bg-muted/20 p-4">
             <label className="grid gap-1.5">
               <span className="text-[0.78rem] font-semibold text-muted-foreground">
@@ -704,7 +795,7 @@ export function NewBridgeForm({
           </div>
         ) : null}
 
-        {form.bridgeType === "webhook" || form.bridgeType === "handshake" ? (
+        {form.entryKind === "bridge" && (form.bridgeType === "webhook" || form.bridgeType === "handshake") ? (
           <div className="grid gap-4 rounded-lg border border-border bg-muted/20 p-4">
             <label className="grid gap-1.5">
               <span className="text-[0.78rem] font-semibold text-muted-foreground">
@@ -735,19 +826,35 @@ export function NewBridgeForm({
           </div>
         ) : null}
 
-        <RichTextField
-          label="Private note (optional)"
-          value={form.privateNote}
-          placeholder="Internal context, deployment details, or team-only notes..."
-          onChange={(value) => updateField("privateNote", value)}
-        />
+        {form.entryKind === "bridge" ? (
+          <RichTextField
+            label="Private note (optional)"
+            value={form.privateNote}
+            placeholder="Internal context, deployment details, or team-only notes..."
+            onChange={(value) => updateField("privateNote", value)}
+          />
+        ) : null}
 
-        <RichTextField
-          label="Public note (optional)"
-          value={form.publicNote}
-          placeholder="Public-facing note or bridge summary..."
-          onChange={(value) => updateField("publicNote", value)}
-        />
+        {!isQuickCreateNote ? (
+          <RichTextField
+            label={
+              form.entryKind === "bridge"
+                ? "Public note (optional)"
+                : form.entryKind === "chapter"
+                  ? "Chapter content"
+                  : "Note content"
+            }
+            value={form.publicNote}
+            placeholder={
+              form.entryKind === "bridge"
+                ? "Public-facing note or bridge summary..."
+                : form.entryKind === "chapter"
+                  ? "Write the chapter content here..."
+                  : "Write the note content here..."
+            }
+            onChange={(value) => updateField("publicNote", value)}
+          />
+        ) : null}
 
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <button

@@ -1,4 +1,5 @@
 export type BridgeType = "api" | "webhook" | "grpc" | "handshake";
+export type BridgeEntryKind = "bridge" | "chapter" | "note";
 
 export type BridgeKeyValueItem = {
   id: string;
@@ -17,6 +18,9 @@ export type ApiBridgeConfig = {
 export type BridgeItem = {
   id: string;
   name: string;
+  entryKind?: BridgeEntryKind;
+  chapterBlockIds?: string[];
+  parentChapterId?: string | null;
   bridgeType: BridgeType;
   isPrivateInternal?: boolean;
   endpoint: string;
@@ -54,6 +58,10 @@ function isBridgeType(value: string): value is BridgeType {
   return value === "api" || value === "webhook" || value === "grpc" || value === "handshake";
 }
 
+function isBridgeEntryKind(value: string): value is BridgeEntryKind {
+  return value === "bridge" || value === "chapter" || value === "note";
+}
+
 function isEnvironment(
   value: string,
 ): value is "development" | "staging" | "production" {
@@ -70,16 +78,44 @@ export function loadBridges(): BridgeItem[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.filter((item): item is BridgeItem => {
-      if (!item || typeof item !== "object") return false;
-      if (typeof item.id !== "string") return false;
-      if (typeof item.name !== "string") return false;
-      if (typeof item.endpoint !== "string") return false;
-      if (typeof item.createdAt !== "string") return false;
-      if (!isBridgeType(item.bridgeType)) return false;
-      if (!isEnvironment(item.environment)) return false;
-      return true;
-    });
+    return parsed
+      .filter((item): item is BridgeItem => {
+        if (!item || typeof item !== "object") return false;
+        if (typeof item.id !== "string") return false;
+        if (typeof item.name !== "string") return false;
+        if (typeof item.endpoint !== "string") return false;
+        if (typeof item.createdAt !== "string") return false;
+        if (!isBridgeType(item.bridgeType)) return false;
+        if (!isEnvironment(item.environment)) return false;
+        if (
+          item.entryKind !== undefined &&
+          (typeof item.entryKind !== "string" || !isBridgeEntryKind(item.entryKind))
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .map((item) => ({
+        ...item,
+        entryKind: item.entryKind ?? "bridge",
+        chapterBlockIds: Array.isArray(item.chapterBlockIds)
+          ? item.chapterBlockIds.filter((id): id is string => typeof id === "string")
+          : [],
+        parentChapterId:
+          typeof item.parentChapterId === "string" ? item.parentChapterId : null,
+      }))
+      .map((item, _, items) => {
+        if (item.parentChapterId) return item;
+
+        const legacyParent =
+          items.find((candidate) => (candidate.chapterBlockIds ?? []).includes(item.id))?.id ??
+          null;
+
+        return {
+          ...item,
+          parentChapterId: legacyParent,
+        };
+      });
   } catch {
     return [];
   }
@@ -92,7 +128,15 @@ export function saveBridges(items: BridgeItem[]) {
 
 export function deleteBridge(id: string) {
   const items = loadBridges();
-  saveBridges(items.filter((item) => item.id !== id));
+  saveBridges(
+    items
+      .filter((item) => item.id !== id)
+      .map((item) => ({
+        ...item,
+        parentChapterId: item.parentChapterId === id ? null : item.parentChapterId ?? null,
+        chapterBlockIds: item.chapterBlockIds?.filter((blockId) => blockId !== id) ?? [],
+      })),
+  );
 }
 
 export function loadBridgeRuns(): Record<string, BridgeRunRecord> {
