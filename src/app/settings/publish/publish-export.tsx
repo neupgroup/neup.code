@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { loadBridges, type BridgeItem } from "../../bridge/bridge-storage";
 import { richTextHasContent, richTextToMarkdown } from "../../bridge/rich-text";
+import { loadComponents, type ComponentItem } from "../../components/component-storage";
+import { buildZip } from "./zip";
 
 const ONBOARDING_STORAGE_KEY = "neup.code.onboarding.github-flow.v1";
 
@@ -80,71 +82,109 @@ function formatBridgeRequest(bridge: BridgeItem) {
   return lines.join("\n");
 }
 
-function buildMarkdown(onboarding: OnboardingState, bridges: BridgeItem[]) {
-  const sections: string[] = [
-    "# Neup.Code export",
-    "",
-    `Generated: ${new Date().toISOString()}`,
-    "",
-    "## Onboarding",
-    "",
-    `- Repository: ${onboarding.repo || "Not set"}`,
-    `- Access target: ${onboarding.target || "Not set"}`,
-    `- Authorized: ${onboarding.isAuthorized ? "Yes" : "No"}`,
-    `- Started: ${onboarding.started ? "Yes" : "No"}`,
-    "",
-    "## Bridges",
-  ];
+function formatFileName(title: string, fallback: string) {
+  const normalized = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
-  if (!bridges.length) {
-    sections.push("", "No bridges saved.");
+  return normalized || fallback;
+}
+
+function buildComponentMarkdown(component: ComponentItem) {
+  const sections: string[] = [component.name, ""];
+
+  if (component.description?.trim()) {
+    sections.push(component.description.trim(), "");
+  }
+
+  if (!component.parts.length) {
+    sections.push("No component parts added.");
     return sections.join("\n");
   }
 
-  bridges.forEach((bridge, index) => {
-    sections.push(
-      "",
-      `### ${index + 1}. ${bridge.name}`,
-      "",
-      `- ID: ${bridge.id}`,
-      `- Type: ${bridge.bridgeType}`,
-      `- Endpoint: ${bridge.endpoint}`,
-      `- Environment: ${bridge.environment}`,
-      `- Private/internal: ${bridge.isPrivateInternal ? "true" : "false"}`,
-      `- Created at: ${bridge.createdAt}`,
-    );
+  component.parts.forEach((part, index) => {
+    sections.push(`## ${part.label || `Part ${index + 1}`}`, "");
 
-    if (bridge.serviceName) {
-      sections.push(`- Service name: ${bridge.serviceName}`);
+    if (part.description?.trim()) {
+      sections.push(part.description.trim(), "");
     }
 
-    if (bridge.secret) {
-      sections.push(`- Secret configured: yes`);
-    }
-
-    if (bridge.requiredFields?.length) {
-      sections.push("", "#### Required fields", "", formatKeyValueList(bridge.requiredFields));
-    }
-
-    const requestSection = formatBridgeRequest(bridge);
-    if (requestSection) {
-      sections.push("", requestSection);
-    }
-
-    const notesSection = formatBridgeNotes(bridge);
-    if (notesSection) {
-      sections.push("", notesSection);
-    }
+    sections.push("```txt", part.code, "```", "");
   });
 
-  return sections.join("\n");
+  return sections.join("\n").trimEnd();
+}
+
+function buildBridgeMarkdown(bridge: BridgeItem) {
+  const sections: string[] = [
+    bridge.name,
+    "",
+    `Type: ${bridge.bridgeType}`,
+    `Endpoint: ${bridge.endpoint}`,
+    `Environment: ${bridge.environment}`,
+    `Private/internal: ${bridge.isPrivateInternal ? "true" : "false"}`,
+    `Created at: ${bridge.createdAt}`,
+  ];
+
+  if (bridge.method) {
+    sections.push(`Method: ${bridge.method}`);
+  }
+
+  if (bridge.serviceName) {
+    sections.push(`Service name: ${bridge.serviceName}`);
+  }
+
+  if (bridge.secret) {
+    sections.push("Secret configured: yes");
+  }
+
+  if (bridge.requiredFields?.length) {
+    sections.push("", "## Required fields", "", formatKeyValueList(bridge.requiredFields));
+  }
+
+  const requestSection = formatBridgeRequest(bridge);
+  if (requestSection) {
+    sections.push("", requestSection);
+  }
+
+  const notesSection = formatBridgeNotes(bridge);
+  if (notesSection) {
+    sections.push("", notesSection);
+  }
+
+  return sections.join("\n").trimEnd();
+}
+
+function buildIndexMarkdown(
+  componentFiles: Array<{ fileName: string }>,
+  bridgeFiles: Array<{ fileName: string }>,
+) {
+  const lines = ["components:"];
+
+  if (componentFiles.length) {
+    lines.push(...componentFiles.map((file) => `-> ${file.fileName}`));
+  } else {
+    lines.push("-> none");
+  }
+
+  lines.push("", "bridge:");
+
+  if (bridgeFiles.length) {
+    lines.push(...bridgeFiles.map((file) => `-> ${file.fileName}`));
+  } else {
+    lines.push("-> none");
+  }
+
+  return lines.join("\n");
 }
 
 export function PublishExport() {
   const [ready, setReady] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingState>({});
   const [bridges, setBridges] = useState<BridgeItem[]>([]);
+  const [components, setComponents] = useState<ComponentItem[]>([]);
 
   useEffect(() => {
     try {
@@ -158,25 +198,47 @@ export function PublishExport() {
     }
 
     setBridges(loadBridges());
+    setComponents(loadComponents());
     setReady(true);
   }, []);
 
-  const markdown = useMemo(() => buildMarkdown(onboarding, bridges), [onboarding, bridges]);
+  const zipEntries = useMemo(() => {
+    const componentFiles = components.map((component, index) => {
+      const baseName = formatFileName(component.name, `component_${index + 1}`);
+      return {
+        fileName: `${baseName}.md`,
+        zipPath: `.docs/components/${baseName}.md`,
+        content: buildComponentMarkdown(component),
+      };
+    });
+
+    const bridgeFiles = bridges.map((bridge, index) => {
+      const baseName = formatFileName(bridge.name, `bridge_${index + 1}`);
+      return {
+        fileName: `${baseName}.md`,
+        zipPath: `.docs/brdge/${baseName}.md`,
+        content: buildBridgeMarkdown(bridge),
+      };
+    });
+
+    const indexContent = buildIndexMarkdown(componentFiles, bridgeFiles);
+
+    return [
+      ...componentFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
+      ...bridgeFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
+      { name: ".docs/index.md", content: indexContent },
+    ];
+  }, [bridges, components]);
 
   function downloadMarkdown() {
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const zipBytes = buildZip(zipEntries);
+    const blob = new Blob([zipBytes], { type: "application/zip" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "neup-code-export.md";
+    anchor.download = "neup-code-export.zip";
     anchor.click();
     URL.revokeObjectURL(url);
-  }
-
-  async function copyMarkdown() {
-    await navigator.clipboard.writeText(markdown);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
   }
 
   return (
@@ -188,36 +250,21 @@ export function PublishExport() {
             Export everything as Markdown
           </h1>
           <p className="max-w-2xl text-[0.9rem] leading-[1.5] text-muted-foreground">
-            Generate a Markdown export from the data saved in this browser, including onboarding state,
-            bridge configuration, and notes.
+            Generate a Markdown export from the data saved in this browser, including onboarding
+            state, bridge configuration, and notes.
           </p>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div>
         <button
           type="button"
           onClick={downloadMarkdown}
           disabled={!ready}
           className="inline-flex rounded-full bg-primary px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
         >
-          Download Markdown
+          Export Markdown
         </button>
-        <button
-          type="button"
-          onClick={copyMarkdown}
-          disabled={!ready}
-          className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-foreground transition hover:bg-muted disabled:opacity-50"
-        >
-          {copied ? "Copied" : "Copy Markdown"}
-        </button>
-      </div>
-
-      <div className="rounded-xl border border-border bg-background p-4">
-        <p className="text-[0.76rem] font-semibold text-muted-foreground">Markdown preview</p>
-        <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-[0.82rem] leading-[1.55] text-foreground">
-          {ready ? markdown : "Loading export..."}
-        </pre>
       </div>
     </section>
   );
