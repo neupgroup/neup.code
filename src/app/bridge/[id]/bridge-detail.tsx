@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BRIDGE_RUN_STORAGE_KEY,
   BRIDGE_STORAGE_KEY,
+  deleteBridge,
+  deleteBridgeRun,
   loadBridgeRuns,
   loadBridges,
   saveBridgeRuns,
@@ -76,8 +79,10 @@ type BridgeDetailProps = {
 };
 
 export function BridgeDetail({ id }: BridgeDetailProps) {
+  const router = useRouter();
   const [bridge, setBridge] = useState<BridgeItem | null>(null);
   const [ready, setReady] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [runRecord, setRunRecord] = useState<BridgeRunRecord>({
     bridgeId: id,
     status: "idle",
@@ -239,6 +244,22 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     }
   }
 
+  function removeBridge() {
+    if (!bridge || isDeleting) return;
+
+    const confirmed = window.confirm(
+      `Delete bridge "${bridge.name}"? This will remove its saved config and run history from this browser.`,
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    deleteBridge(bridge.id);
+    deleteBridgeRun(bridge.id);
+    router.push("/bridge");
+    router.refresh();
+  }
+
   if (!ready) {
     return (
       <section className="rounded-[1.1rem] border border-border bg-card p-6">
@@ -296,6 +317,14 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
             >
               Edit bridge
             </Link>
+            <button
+              type="button"
+              onClick={removeBridge}
+              disabled={isDeleting}
+              className="inline-flex rounded-full border border-rose-200 px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
+            >
+              {isDeleting ? "Deleting..." : "Delete bridge"}
+            </button>
             <button
               type="button"
               onClick={runBridge}

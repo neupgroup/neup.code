@@ -86,6 +86,11 @@ export function saveBridges(items: BridgeItem[]) {
   window.localStorage.setItem(BRIDGE_STORAGE_KEY, JSON.stringify(items));
 }
 
+export function deleteBridge(id: string) {
+  const items = loadBridges();
+  saveBridges(items.filter((item) => item.id !== id));
+}
+
 export function loadBridgeRuns(): Record<string, BridgeRunRecord> {
   if (typeof window === "undefined") return {};
 
@@ -117,4 +122,11 @@ export function loadBridgeRuns(): Record<string, BridgeRunRecord> {
 export function saveBridgeRuns(items: Record<string, BridgeRunRecord>) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(BRIDGE_RUN_STORAGE_KEY, JSON.stringify(items));
+}
+
+export function deleteBridgeRun(id: string) {
+  const items = loadBridgeRuns();
+  const nextItems = { ...items };
+  delete nextItems[id];
+  saveBridgeRuns(nextItems);
 }
