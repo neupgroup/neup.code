@@ -58,8 +58,8 @@ export default function Home() {
         ))}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr] xl:items-start">
-        <article className="rounded-[1.1rem] border border-border bg-card p-5">
+      <section className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr] xl:items-start">
+        <article className="border-t border-border pt-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[1.18rem] font-semibold leading-[1.2] tracking-[-0.01em]">
               Recent activity
@@ -96,7 +96,7 @@ export default function Home() {
           </ul>
         </article>
 
-        <article className="rounded-[1.1rem] border border-border bg-card p-5">
+        <article className="border-t border-border pt-4">
           <h2 className="text-[1.18rem] font-semibold leading-[1.2] tracking-[-0.01em]">
             Quick links
           </h2>

@@ -104,8 +104,8 @@ export function GitHubRepoFlow() {
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_20rem]">
-      <section className="rounded-[1.1rem] border border-border bg-card p-5 sm:p-6">
+    <div className="grid gap-10 xl:grid-cols-[minmax(0,1.2fr)_20rem]">
+      <section className="space-y-6">
         <div className="space-y-5">
           <div>
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -176,7 +176,7 @@ export function GitHubRepoFlow() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
+          <div className="rounded-xl border border-border bg-muted/30 p-3">
             <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Step 2
             </p>
@@ -198,7 +198,7 @@ export function GitHubRepoFlow() {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="button"
               onClick={startChanges}
@@ -219,24 +219,24 @@ export function GitHubRepoFlow() {
         </div>
       </section>
 
-      <aside className="rounded-[1.1rem] border border-border bg-card p-5">
+      <aside className="space-y-4 xl:pl-2">
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Status
         </p>
         <ul className="mt-3 space-y-2.5">
-          <li className="rounded-lg border border-border bg-muted/25 px-3 py-2.5">
+          <li className="rounded-xl border border-border bg-background px-3 py-2.5">
             <p className="text-[0.82rem] font-medium text-muted-foreground">Repository</p>
             <p className="mt-1 text-[0.88rem] font-semibold">
               {validRepo ? normalizedRepo : "Waiting for repository"}
             </p>
           </li>
-          <li className="rounded-lg border border-border bg-muted/25 px-3 py-2.5">
+          <li className="rounded-xl border border-border bg-background px-3 py-2.5">
             <p className="text-[0.82rem] font-medium text-muted-foreground">Access target</p>
             <p className="mt-1 text-[0.88rem] font-semibold">
               {target === "repository" ? "Repository access" : "Profile access"}
             </p>
           </li>
-          <li className="rounded-lg border border-border bg-muted/25 px-3 py-2.5">
+          <li className="rounded-xl border border-border bg-background px-3 py-2.5">
             <p className="text-[0.82rem] font-medium text-muted-foreground">Authorization</p>
             <p className="mt-1 text-[0.88rem] font-semibold">
               {isAuthorized ? "Authorized" : "Not authorized"}
@@ -245,7 +245,7 @@ export function GitHubRepoFlow() {
         </ul>
 
         {started ? (
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
             <p className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-emerald-700">
               Ready
             </p>

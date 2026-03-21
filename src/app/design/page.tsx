@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function DesignPage() {
   return (
-    <section className="rounded-[1.1rem] border border-border bg-card p-6">
+    <section>
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         Design
       </p>

@@ -15,6 +15,7 @@ import {
   type BridgeItem,
   type BridgeRunRecord,
 } from "../bridge-storage";
+import { normalizeRichTextHtml, richTextHasContent } from "../rich-text";
 
 function bridgeTypeLabel(type: BridgeItem["bridgeType"]) {
   if (type === "grpc") return "gRPC";
@@ -35,6 +36,10 @@ function buildRunOutput(bridge: BridgeItem) {
 
   if (bridge.serviceName) {
     lines.push(`Service: ${bridge.serviceName}`);
+  }
+
+  if (bridge.requiredFields?.length) {
+    lines.push(`Required fields: ${bridge.requiredFields.length}`);
   }
 
   if (bridge.apiConfig) {
@@ -62,6 +67,10 @@ function cleanHeaderItems(items: BridgeKeyValueItem[]) {
   return items.filter((item) => item.key.trim().length > 0);
 }
 
+function cleanKeyValueItems(items: BridgeKeyValueItem[]) {
+  return items.filter((item) => item.key.trim().length > 0 || item.value.trim().length > 0);
+}
+
 async function readResponseBody(response: Response) {
   const text = await response.text();
   if (!text) return "";
@@ -87,6 +96,15 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     bridgeId: id,
     status: "idle",
   });
+  const hasRunActivity = runRecord.status !== "idle";
+  const apiHeaders = bridge?.apiConfig ? cleanKeyValueItems(bridge.apiConfig.headers) : [];
+  const apiQueryParams = bridge?.apiConfig ? cleanKeyValueItems(bridge.apiConfig.queryParams) : [];
+  const apiFormData = bridge?.apiConfig ? cleanKeyValueItems(bridge.apiConfig.formData) : [];
+  const requiredFields = bridge?.requiredFields ? cleanKeyValueItems(bridge.requiredFields) : [];
+  const hasRequestBody =
+    bridge?.apiConfig?.bodyType !== "none" && Boolean(bridge?.apiConfig?.body);
+  const normalizedPrivateNote = normalizeRichTextHtml(bridge?.privateNote ?? "");
+  const normalizedPublicNote = normalizeRichTextHtml(bridge?.publicNote ?? bridge?.notes ?? "");
 
   useEffect(() => {
     const allBridges = loadBridges();
@@ -262,7 +280,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
 
   if (!ready) {
     return (
-      <section className="rounded-[1.1rem] border border-border bg-card p-6">
+      <section>
         <p className="text-[0.9rem] text-muted-foreground">Loading bridge...</p>
       </section>
     );
@@ -270,7 +288,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
 
   if (!bridge) {
     return (
-      <section className="rounded-[1.1rem] border border-border bg-card p-6">
+      <section>
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Bridge
         </p>
@@ -291,52 +309,41 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_20rem]">
-      <section className="rounded-[1.1rem] border border-border bg-card p-6">
+    <section className="space-y-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Bridge
-            </p>
-            <h1 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.02em]">
-              {bridge.name}
-            </h1>
-            <p className="mt-1 text-[0.88rem] text-muted-foreground">{bridge.endpoint}</p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
             <Link
               href="/bridge"
-              className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
+              className="inline-flex items-center gap-2 text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition hover:text-foreground"
             >
-              Back
+              <span aria-hidden="true">&lt;</span>
+              <span>Bridge</span>
             </Link>
-            <Link
-              href={`/bridge/${bridge.id}/edit`}
-              className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
-            >
-              Edit bridge
-            </Link>
-            <button
-              type="button"
-              onClick={removeBridge}
-              disabled={isDeleting}
-              className="inline-flex rounded-full border border-rose-200 px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
-            >
-              {isDeleting ? "Deleting..." : "Delete bridge"}
-            </button>
-            <button
-              type="button"
-              onClick={runBridge}
-              disabled={runRecord.status === "running"}
-              className="inline-flex rounded-full bg-primary px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
-            >
-              {runRecord.status === "running" ? "Running..." : "Run bridge"}
-            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em]">
+                {bridge.name}
+              </h1>
+              <button
+                type="button"
+                onClick={runBridge}
+                disabled={runRecord.status === "running"}
+                aria-label="Run bridge"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 fill-current"
+                >
+                  <path d="M8 6.5v11l9-5.5-9-5.5Z" />
+                </svg>
+              </button>
+            </div>
+            <p className="mt-1 text-[0.88rem] text-muted-foreground">{bridge.endpoint}</p>
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2 text-[0.75rem] text-muted-foreground">
+        <div className="flex flex-wrap gap-2 text-[0.75rem] text-muted-foreground">
           <span className="rounded-full border border-border px-2 py-0.5">
             {bridgeTypeLabel(bridge.bridgeType)}
           </span>
@@ -356,129 +363,251 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
         </div>
 
         {bridge.apiConfig ? (
-          <div className="mt-5 grid gap-3 rounded-lg border border-border bg-muted/20 p-4">
-            <h2 className="text-[1rem] font-semibold">API configuration</h2>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-border bg-background px-3 py-3">
-                <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Headers
-                </p>
-                <p className="mt-1 text-[0.92rem] font-semibold">
-                  {bridge.apiConfig.headers.length}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-3">
-                <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Query Params
-                </p>
-                <p className="mt-1 text-[0.92rem] font-semibold">
-                  {bridge.apiConfig.queryParams.length}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-background px-3 py-3">
-                <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Form Data
-                </p>
-                <p className="mt-1 text-[0.92rem] font-semibold">
-                  {bridge.apiConfig.formData.length}
-                </p>
+          <div className="grid gap-3 pt-2">
+            <h2 className="text-[1.1rem] font-semibold tracking-[-0.01em]">
+              API configuration
+            </h2>
+            <div className="rounded-xl border border-border bg-background p-4">
+              <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Request preview
+              </p>
+
+              <div className="mt-3 grid gap-3 text-[0.84rem] text-foreground">
+                <div>
+                  <p className="font-semibold">Method</p>
+                  <p className="mt-1 text-muted-foreground">{bridge.method ?? "GET"}</p>
+                </div>
+
+                <div>
+                  <p className="font-semibold">Request URL</p>
+                  <p className="mt-1 break-all text-muted-foreground">
+                    {keyValueItemsToUrl(bridge.endpoint, bridge.apiConfig.queryParams)}
+                  </p>
+                </div>
+
+                {apiHeaders.length ? (
+                  <div>
+                    <p className="font-semibold">Headers</p>
+                    <div className="mt-1 grid gap-1">
+                    {apiHeaders.map((item) => (
+                      <p key={item.id} className="text-muted-foreground">
+                        <span className="font-medium text-foreground">{item.key || "(empty key)"}:</span>{" "}
+                        {item.value || "(empty value)"}
+                      </p>
+                    ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {apiQueryParams.length ? (
+                  <div>
+                    <p className="font-semibold">Query params</p>
+                    <div className="mt-1 grid gap-1">
+                    {apiQueryParams.map((item) => (
+                      <p key={item.id} className="text-muted-foreground">
+                        <span className="font-medium text-foreground">{item.key || "(empty key)"}</span>
+                        {" = "}
+                        {item.value || "(empty value)"}
+                      </p>
+                    ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {apiFormData.length ? (
+                  <div>
+                    <p className="font-semibold">Form data</p>
+                    <div className="mt-1 grid gap-1">
+                      {apiFormData.map((item) => (
+                        <p key={item.id} className="text-muted-foreground">
+                          <span className="font-medium text-foreground">{item.key || "(empty key)"}</span>
+                          {" = "}
+                          {item.value || "(empty value)"}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {apiFormData.length ? (
+                  <div>
+                    <p className="font-semibold">Request body</p>
+                    <p className="mt-1 text-muted-foreground">
+                      This request will be sent as multipart form data.
+                    </p>
+                  </div>
+                ) : hasRequestBody ? (
+                  <div>
+                    <p className="font-semibold">Request body</p>
+                    <div className="mt-1">
+                      <p className="text-muted-foreground">
+                        Body type: <span className="font-medium text-foreground">{bridge.apiConfig.bodyType}</span>
+                      </p>
+                      <pre className="mt-2 overflow-x-auto rounded-md bg-muted/40 p-3 text-[0.78rem] text-foreground">
+                        {bridge.apiConfig.body}
+                      </pre>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
+          </div>
+        ) : null}
 
-            {bridge.apiConfig.bodyType !== "none" ? (
-              <div className="rounded-lg border border-border bg-background px-3 py-3">
+        {!bridge.apiConfig && (bridge.serviceName || bridge.secret || requiredFields.length) ? (
+          <div className="grid gap-3 pt-2">
+            <h2 className="text-[1.1rem] font-semibold tracking-[-0.01em]">
+              Bridge configuration
+            </h2>
+            <div className="rounded-xl border border-border bg-background p-4">
+              <div className="grid gap-3 text-[0.84rem] text-foreground">
+                {bridge.serviceName ? (
+                  <div>
+                    <p className="font-semibold">Service name</p>
+                    <p className="mt-1 text-muted-foreground">{bridge.serviceName}</p>
+                  </div>
+                ) : null}
+
+                {bridge.secret ? (
+                  <div>
+                    <p className="font-semibold">
+                      {bridge.bridgeType === "webhook" ? "Signing secret" : "Handshake key"}
+                    </p>
+                    <p className="mt-1 text-muted-foreground">Configured</p>
+                  </div>
+                ) : null}
+
+                {requiredFields.length ? (
+                  <div>
+                    <p className="font-semibold">Required fields</p>
+                    <div className="mt-1 grid gap-1">
+                      {requiredFields.map((item) => (
+                        <p key={item.id} className="text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {item.key || "(empty key)"}
+                          </span>
+                          {item.value ? ` - ${item.value}` : ""}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {richTextHasContent(normalizedPrivateNote) ? (
+          <div className="pt-2">
+            <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Private note
+            </p>
+            <div
+              className="mt-2 prose prose-sm max-w-none text-[0.88rem] text-foreground"
+              dangerouslySetInnerHTML={{ __html: normalizedPrivateNote }}
+            />
+          </div>
+        ) : null}
+
+        {richTextHasContent(normalizedPublicNote) ? (
+          <div className="pt-2">
+            <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Public note
+            </p>
+            <div
+              className="mt-2 prose prose-sm max-w-none text-[0.88rem] text-foreground"
+              dangerouslySetInnerHTML={{ __html: normalizedPublicNote }}
+            />
+          </div>
+        ) : null}
+        {hasRunActivity ? (
+          <div className="space-y-5 pt-4">
+            <div>
+              <h2 className="text-[1.1rem] font-semibold tracking-[-0.01em]">Response</h2>
+            </div>
+
+            {runRecord.output ? (
+              <div className="rounded-xl border border-border bg-background p-4">
                 <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Body
+                  Output
                 </p>
-                <p className="mt-1 text-[0.8rem] text-muted-foreground">
-                  Type: {bridge.apiConfig.bodyType}
+                <p className="mt-2 text-[0.98rem] font-semibold capitalize">
+                  {runRecord.status}
                 </p>
-                <pre className="mt-2 overflow-x-auto rounded-md bg-muted/50 p-3 text-[0.78rem] text-foreground">
-                  {bridge.apiConfig.body || "No body content"}
+                <p className="mt-1 text-[0.84rem] text-muted-foreground">
+                  {runRecord.lastRunAt
+                    ? `Last run: ${new Date(runRecord.lastRunAt).toLocaleString()}`
+                    : "Bridge has not been run yet."}
+                </p>
+                <pre className="mt-2 whitespace-pre-wrap text-[0.8rem] text-foreground">
+                  {runRecord.output}
                 </pre>
+                <div className="mt-3 grid gap-2 text-[0.82rem] text-foreground">
+                  <p>
+                    <span className="font-semibold">Request URL:</span>{" "}
+                    {runRecord.response?.requestUrl || "No response yet."}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Status:</span>{" "}
+                    {runRecord.response?.statusCode
+                      ? `${runRecord.response.statusCode} ${runRecord.response.statusText ?? ""}`.trim()
+                      : "No response yet."}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Duration:</span>{" "}
+                    {typeof runRecord.response?.durationMs === "number"
+                      ? `${runRecord.response.durationMs}ms`
+                      : "N/A"}
+                  </p>
+                </div>
               </div>
             ) : null}
-          </div>
-        ) : null}
 
-        {bridge.notes ? (
-          <div className="mt-5 rounded-lg border border-border bg-muted/20 p-4">
-            <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Notes
-            </p>
-            <p className="mt-2 text-[0.88rem] text-foreground">{bridge.notes}</p>
-          </div>
-        ) : null}
-      </section>
-
-      <aside className="rounded-[1.1rem] border border-border bg-card p-5">
-        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Run status
-        </p>
-        <p className="mt-3 text-[1rem] font-semibold capitalize">{runRecord.status}</p>
-        <p className="mt-1 text-[0.82rem] text-muted-foreground">
-          {runRecord.lastRunAt
-            ? `Last run: ${new Date(runRecord.lastRunAt).toLocaleString()}`
-            : "Bridge has not been run yet."}
-        </p>
-
-        <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
-          <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Output
-          </p>
-          <pre className="mt-2 whitespace-pre-wrap text-[0.8rem] text-foreground">
-            {runRecord.output || "No run output yet."}
-          </pre>
-        </div>
-
-        <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
-          <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Response
-          </p>
-          <div className="mt-2 grid gap-2 text-[0.8rem] text-foreground">
-            <p>
-              <span className="font-semibold">Request URL:</span>{" "}
-              {runRecord.response?.requestUrl || "No response yet."}
-            </p>
-            <p>
-              <span className="font-semibold">Status:</span>{" "}
-              {runRecord.response?.statusCode
-                ? `${runRecord.response.statusCode} ${runRecord.response.statusText ?? ""}`.trim()
-                : "No response yet."}
-            </p>
-            <p>
-              <span className="font-semibold">Duration:</span>{" "}
-              {typeof runRecord.response?.durationMs === "number"
-                ? `${runRecord.response.durationMs}ms`
-                : "N/A"}
-            </p>
-          </div>
-
-          {runRecord.response?.headers?.length ? (
-            <div className="mt-3">
-              <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Response headers
-              </p>
-              <div className="mt-2 grid gap-1">
-                {runRecord.response.headers.map((header) => (
-                  <p key={header.id} className="text-[0.78rem] text-foreground">
-                    <span className="font-semibold">{header.key}:</span> {header.value}
+            <div className="space-y-4">
+              {runRecord.response?.headers?.length ? (
+                <div>
+                  <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Response headers
                   </p>
-                ))}
+                  <div className="mt-2 rounded-xl border border-border bg-background p-4">
+                    <div className="grid gap-1">
+                      {runRecord.response.headers.map((header) => (
+                        <p key={header.id} className="text-[0.78rem] text-foreground">
+                          <span className="font-semibold">{header.key}:</span> {header.value}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div>
+                <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Response body
+                </p>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-xl border border-border bg-background p-4 text-[0.78rem] text-foreground">
+                  {runRecord.response?.body || "No response body yet."}
+                </pre>
               </div>
             </div>
-          ) : null}
-
-          <div className="mt-3">
-            <p className="text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Response body
-            </p>
-            <pre className="mt-2 whitespace-pre-wrap rounded-md bg-background p-3 text-[0.78rem] text-foreground">
-              {runRecord.response?.body || "No response body yet."}
-            </pre>
           </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2 pt-4">
+          <Link
+            href={`/bridge/${bridge.id}/edit`}
+            className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
+          >
+            Edit bridge
+          </Link>
+          <button
+            type="button"
+            onClick={removeBridge}
+            disabled={isDeleting}
+            className="inline-flex rounded-full border border-rose-200 px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
+          >
+            {isDeleting ? "Deleting..." : "Delete bridge"}
+          </button>
         </div>
-      </aside>
-    </div>
+      </section>
   );
 }

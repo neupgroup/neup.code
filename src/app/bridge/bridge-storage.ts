@@ -18,12 +18,16 @@ export type BridgeItem = {
   id: string;
   name: string;
   bridgeType: BridgeType;
+  isPrivateInternal?: boolean;
   endpoint: string;
   environment: "development" | "staging" | "production";
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   apiConfig?: ApiBridgeConfig;
+  requiredFields?: BridgeKeyValueItem[];
   serviceName?: string;
   secret?: string;
+  privateNote?: string;
+  publicNote?: string;
   notes?: string;
   createdAt: string;
 };

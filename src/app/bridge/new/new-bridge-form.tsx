@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { SelectionChipGroup } from "../../../components/ui/chip";
+import {
+  normalizeRichTextHtml,
+  richTextHasContent,
+} from "../rich-text";
 import {
   loadBridges,
   saveBridges,
@@ -43,7 +48,7 @@ function KeyValueEditor({
   return (
     <div className="grid gap-2">
       <div>
-        <p className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="text-[0.78rem] font-semibold text-muted-foreground">
           {label}
         </p>
         {hint ? <p className="mt-1 text-[0.78rem] text-muted-foreground">{hint}</p> : null}
@@ -92,9 +97,96 @@ function KeyValueEditor({
   );
 }
 
+type RichTextFieldProps = {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+};
+
+function RichTextField({ label, value, placeholder, onChange }: RichTextFieldProps) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (editorRef.current.innerHTML === value) return;
+    editorRef.current.innerHTML = value;
+  }, [value]);
+
+  function applyCommand(command: "bold" | "italic" | "underline") {
+    if (typeof document === "undefined") return;
+    editorRef.current?.focus();
+    document.execCommand(command);
+    onChange(normalizeRichTextHtml(editorRef.current?.innerHTML ?? ""));
+  }
+
+  function handleInput() {
+    onChange(normalizeRichTextHtml(editorRef.current?.innerHTML ?? ""));
+  }
+
+  function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const text = event.clipboardData.getData("text/plain");
+    if (typeof document !== "undefined") {
+      document.execCommand("insertText", false, text);
+    }
+    onChange(normalizeRichTextHtml(editorRef.current?.innerHTML ?? ""));
+  }
+
+  const isEmpty = !richTextHasContent(value);
+
+  return (
+    <div className="grid gap-2">
+      <span className="text-[0.78rem] font-semibold text-muted-foreground">{label}</span>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => applyCommand("bold")}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-[0.84rem] font-semibold transition hover:bg-muted"
+        >
+          B
+        </button>
+        <button
+          type="button"
+          onClick={() => applyCommand("italic")}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-[0.84rem] italic transition hover:bg-muted"
+        >
+          I
+        </button>
+        <button
+          type="button"
+          onClick={() => applyCommand("underline")}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-[0.84rem] underline transition hover:bg-muted"
+        >
+          U
+        </button>
+      </div>
+
+      <div className="relative w-full max-w-2xl rounded-xl border border-border bg-background">
+        {isEmpty ? (
+          <p className="pointer-events-none absolute left-3 top-3 text-[0.9rem] text-muted-foreground">
+            {placeholder}
+          </p>
+        ) : null}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={handleInput}
+          onBlur={handleInput}
+          onPaste={handlePaste}
+          className="min-h-28 px-3 py-3 text-[0.92rem] outline-none"
+        />
+      </div>
+    </div>
+  );
+}
+
 type NewBridgeFormState = {
   name: string;
   bridgeType: BridgeType;
+  isPrivateInternal: boolean;
   endpoint: string;
   environment: BridgeItem["environment"];
   method: NonNullable<BridgeItem["method"]>;
@@ -103,9 +195,11 @@ type NewBridgeFormState = {
   apiFormData: BridgeKeyValueItem[];
   apiBodyType: "none" | "json" | "raw";
   apiBody: string;
+  requiredFields: BridgeKeyValueItem[];
   serviceName: string;
   secret: string;
-  notes: string;
+  privateNote: string;
+  publicNote: string;
 };
 
 type FormErrors = Partial<Record<keyof NewBridgeFormState, string>>;
@@ -113,6 +207,7 @@ type FormErrors = Partial<Record<keyof NewBridgeFormState, string>>;
 const INITIAL_STATE: NewBridgeFormState = {
   name: "",
   bridgeType: "api",
+  isPrivateInternal: false,
   endpoint: "",
   environment: "development",
   method: "POST",
@@ -121,15 +216,18 @@ const INITIAL_STATE: NewBridgeFormState = {
   apiFormData: [],
   apiBodyType: "none",
   apiBody: "",
+  requiredFields: [],
   serviceName: "",
   secret: "",
-  notes: "",
+  privateNote: "",
+  publicNote: "",
 };
 
 function bridgeToFormState(bridge: BridgeItem): NewBridgeFormState {
   return {
     name: bridge.name,
     bridgeType: bridge.bridgeType,
+    isPrivateInternal: Boolean(bridge.isPrivateInternal),
     endpoint: bridge.endpoint,
     environment: bridge.environment,
     method: bridge.method ?? "POST",
@@ -138,9 +236,11 @@ function bridgeToFormState(bridge: BridgeItem): NewBridgeFormState {
     apiFormData: bridge.apiConfig?.formData ?? [],
     apiBodyType: bridge.apiConfig?.bodyType ?? "none",
     apiBody: bridge.apiConfig?.body ?? "",
+    requiredFields: bridge.requiredFields ?? [],
     serviceName: bridge.serviceName ?? "",
     secret: bridge.secret ?? "",
-    notes: bridge.notes ?? "",
+    privateNote: bridge.privateNote ?? "",
+    publicNote: bridge.publicNote ?? bridge.notes ?? "",
   };
 }
 
@@ -159,10 +259,19 @@ export function NewBridgeForm({
   );
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [showApiHeaders, setShowApiHeaders] = useState(() => form.apiHeaders.length > 0);
+  const [showApiQueryParams, setShowApiQueryParams] = useState(
+    () => form.apiQueryParams.length > 0,
+  );
+  const [showApiFormData, setShowApiFormData] = useState(() => form.apiFormData.length > 0);
 
   useEffect(() => {
     if (mode === "edit" && bridge) {
-      setForm(bridgeToFormState(bridge));
+      const nextForm = bridgeToFormState(bridge);
+      setForm(nextForm);
+      setShowApiHeaders(nextForm.apiHeaders.length > 0);
+      setShowApiQueryParams(nextForm.apiQueryParams.length > 0);
+      setShowApiFormData(nextForm.apiFormData.length > 0);
       setErrors({});
     }
   }, [bridge, mode]);
@@ -175,7 +284,9 @@ export function NewBridgeForm({
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   }
 
-  function addKeyValueItem(field: "apiHeaders" | "apiQueryParams" | "apiFormData") {
+  function addKeyValueItem(
+    field: "apiHeaders" | "apiQueryParams" | "apiFormData" | "requiredFields",
+  ) {
     setForm((prev) => ({
       ...prev,
       [field]: [...prev[field], createKeyValueItem()],
@@ -183,7 +294,7 @@ export function NewBridgeForm({
   }
 
   function changeKeyValueItem(
-    field: "apiHeaders" | "apiQueryParams" | "apiFormData",
+    field: "apiHeaders" | "apiQueryParams" | "apiFormData" | "requiredFields",
     id: string,
     targetField: "key" | "value",
     value: string,
@@ -196,11 +307,30 @@ export function NewBridgeForm({
     }));
   }
 
-  function removeKeyValueItem(field: "apiHeaders" | "apiQueryParams" | "apiFormData", id: string) {
-    setForm((prev) => ({
-      ...prev,
-      [field]: prev[field].filter((item) => item.id !== id),
-    }));
+  function removeKeyValueItem(
+    field: "apiHeaders" | "apiQueryParams" | "apiFormData" | "requiredFields",
+    id: string,
+  ) {
+    setForm((prev) => {
+      const nextItems = prev[field].filter((item) => item.id !== id);
+
+      if (field === "apiHeaders" && nextItems.length === 0) {
+        setShowApiHeaders(false);
+      }
+
+      if (field === "apiQueryParams" && nextItems.length === 0) {
+        setShowApiQueryParams(false);
+      }
+
+      if (field === "apiFormData" && nextItems.length === 0) {
+        setShowApiFormData(false);
+      }
+
+      return {
+        ...prev,
+        [field]: nextItems,
+      };
+    });
   }
 
   function cleanKeyValueItems(items: BridgeKeyValueItem[]) {
@@ -245,6 +375,7 @@ export function NewBridgeForm({
       id: bridge?.id ?? createId(),
       name: form.name.trim(),
       bridgeType: form.bridgeType,
+      isPrivateInternal: form.isPrivateInternal,
       endpoint: form.endpoint.trim(),
       environment: form.environment,
       createdAt: bridge?.createdAt ?? new Date().toISOString(),
@@ -265,12 +396,27 @@ export function NewBridgeForm({
       item.serviceName = form.serviceName.trim();
     }
 
+    if (
+      form.bridgeType === "webhook" ||
+      form.bridgeType === "handshake" ||
+      form.bridgeType === "grpc"
+    ) {
+      item.requiredFields = cleanKeyValueItems(form.requiredFields);
+    }
+
     if (form.bridgeType === "webhook" || form.bridgeType === "handshake") {
       item.secret = form.secret.trim();
     }
 
-    if (form.notes.trim()) {
-      item.notes = form.notes.trim();
+    const normalizedPrivateNote = normalizeRichTextHtml(form.privateNote);
+    const normalizedPublicNote = normalizeRichTextHtml(form.publicNote);
+
+    if (richTextHasContent(normalizedPrivateNote)) {
+      item.privateNote = normalizedPrivateNote;
+    }
+
+    if (richTextHasContent(normalizedPublicNote)) {
+      item.publicNote = normalizedPublicNote;
     }
 
     return item;
@@ -308,53 +454,92 @@ export function NewBridgeForm({
       ? "Save changes"
       : "Save bridge";
   const cancelHref = isEditMode && bridge ? `/bridge/${bridge.id}` : "/bridge";
+  const backHref = isEditMode && bridge ? `/bridge/${bridge.id}` : "/bridge";
+  const backLabel = isEditMode ? bridge?.name ?? "Bridge" : "Bridge";
+  const bridgeTypeOptions = [
+    { label: "API", value: "api" },
+    { label: "Webhook", value: "webhook" },
+    { label: "gRPC", value: "grpc" },
+    { label: "Handshake", value: "handshake" },
+  ] as const;
+  const privateInternalOptions = [
+    { label: "False", value: "false" },
+    { label: "True", value: "true" },
+  ] as const;
+  const environmentOptions = [
+    { label: "Development", value: "development" },
+    { label: "Staging", value: "staging" },
+    { label: "Production", value: "production" },
+  ] as const;
+  const methodOptions = [
+    { label: "GET", value: "GET" },
+    { label: "POST", value: "POST" },
+    { label: "PUT", value: "PUT" },
+    { label: "PATCH", value: "PATCH" },
+    { label: "DELETE", value: "DELETE" },
+  ] as const;
+  const bodyTypeOptions = [
+    { label: "None", value: "none" },
+    { label: "JSON", value: "json" },
+    { label: "Raw", value: "raw" },
+  ] as const;
 
   return (
-    <section className="rounded-[1.1rem] border border-border bg-card p-6">
-      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        Bridge
-      </p>
-      <h1 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.02em]">{heading}</h1>
-      <p className="mt-1 text-[0.88rem] text-muted-foreground">{description}</p>
+    <section className="space-y-7">
+      <div className="space-y-3">
+        <Link
+          href={backHref}
+          className="inline-flex items-center gap-2 text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition hover:text-foreground"
+        >
+          <span aria-hidden="true">&lt;</span>
+          <span>{backLabel}</span>
+        </Link>
+        <div className="space-y-2">
+          <h1 className="text-[1.65rem] font-semibold leading-[1.08] tracking-[-0.02em]">
+            {heading}
+          </h1>
+          <p className="max-w-2xl text-[0.9rem] leading-[1.5] text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
 
-      <form className="mt-5 grid gap-4" onSubmit={saveBridge}>
+      <form className="grid gap-4 pt-1" onSubmit={saveBridge}>
         <label className="grid gap-1.5">
-          <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="text-[0.78rem] font-semibold text-muted-foreground">
             Bridge name
           </span>
           <input
             value={form.name}
             onChange={(event) => updateField("name", event.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+            className="w-full max-w-xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
             placeholder="Primary API Bridge"
           />
           {errors.name ? <span className="text-[0.78rem] text-rose-600">{errors.name}</span> : null}
         </label>
 
-        <label className="grid gap-1.5">
-          <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Bridge type
-          </span>
-          <select
-            value={form.bridgeType}
-            onChange={(event) => updateField("bridgeType", event.target.value as BridgeType)}
-            className="rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
-          >
-            <option value="api">api</option>
-            <option value="webhook">webhook</option>
-            <option value="grpc">gRPC</option>
-            <option value="handshake">handshake</option>
-          </select>
-        </label>
+        <SelectionChipGroup
+          label="Bridge type"
+          options={[...bridgeTypeOptions]}
+          value={form.bridgeType}
+          onChange={(value) => updateField("bridgeType", value as BridgeType)}
+        />
+
+        <SelectionChipGroup
+          label="Private/internal bridge"
+          options={[...privateInternalOptions]}
+          value={form.isPrivateInternal ? "true" : "false"}
+          onChange={(value) => updateField("isPrivateInternal", value === "true")}
+        />
 
         <label className="grid gap-1.5">
-          <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="text-[0.78rem] font-semibold text-muted-foreground">
             Endpoint
           </span>
           <input
             value={form.endpoint}
             onChange={(event) => updateField("endpoint", event.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+            className="w-full max-w-xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
             placeholder="https://api.example.com/v1"
           />
           {errors.endpoint ? (
@@ -362,104 +547,96 @@ export function NewBridgeForm({
           ) : null}
         </label>
 
-        <label className="grid gap-1.5">
-          <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Environment
-          </span>
-          <select
-            value={form.environment}
-            onChange={(event) =>
-              updateField("environment", event.target.value as BridgeItem["environment"])
-            }
-            className="rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
-          >
-            <option value="development">development</option>
-            <option value="staging">staging</option>
-            <option value="production">production</option>
-          </select>
-        </label>
+        <SelectionChipGroup
+          label="Environment"
+          options={[...environmentOptions]}
+          value={form.environment}
+          onChange={(value) => updateField("environment", value as BridgeItem["environment"])}
+        />
 
         {form.bridgeType === "api" ? (
           <div className="grid gap-4 rounded-lg border border-border bg-muted/20 p-4">
-            <p className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <p className="text-[0.78rem] font-semibold text-muted-foreground">
               API configuration
             </p>
 
-            <label className="grid gap-1.5">
-              <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                HTTP method
-              </span>
-              <select
-                value={form.method}
-                onChange={(event) =>
-                  updateField(
-                    "method",
-                    event.target.value as NonNullable<BridgeItem["method"]>,
-                  )
-                }
-                className="rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
-              >
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-                <option value="PATCH">PATCH</option>
-                <option value="DELETE">DELETE</option>
-              </select>
-            </label>
-
-            <KeyValueEditor
-              label="Headers"
-              hint="Add any custom request headers."
-              items={form.apiHeaders}
-              addLabel="Add header"
-              onAdd={() => addKeyValueItem("apiHeaders")}
-              onChange={(id, field, value) =>
-                changeKeyValueItem("apiHeaders", id, field, value)
+            <SelectionChipGroup
+              label="HTTP method"
+              options={[...methodOptions]}
+              value={form.method}
+              onChange={(value) =>
+                updateField("method", value as NonNullable<BridgeItem["method"]>)
               }
-              onRemove={(id) => removeKeyValueItem("apiHeaders", id)}
             />
 
-            <KeyValueEditor
-              label="Query params"
-              hint="Optional query parameters appended to the endpoint."
-              items={form.apiQueryParams}
-              addLabel="Add query param"
-              onAdd={() => addKeyValueItem("apiQueryParams")}
-              onChange={(id, field, value) =>
-                changeKeyValueItem("apiQueryParams", id, field, value)
-              }
-              onRemove={(id) => removeKeyValueItem("apiQueryParams", id)}
-            />
-
-            <label className="grid gap-1.5">
-              <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Body type
-              </span>
-              <select
-                value={form.apiBodyType}
-                onChange={(event) =>
-                  updateField(
-                    "apiBodyType",
-                    event.target.value as NewBridgeFormState["apiBodyType"],
-                  )
+            {showApiHeaders ? (
+              <KeyValueEditor
+                label="Headers"
+                hint="Add any custom request headers."
+                items={form.apiHeaders}
+                addLabel="Add header"
+                onAdd={() => addKeyValueItem("apiHeaders")}
+                onChange={(id, field, value) =>
+                  changeKeyValueItem("apiHeaders", id, field, value)
                 }
-                className="rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+                onRemove={(id) => removeKeyValueItem("apiHeaders", id)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApiHeaders(true);
+                  addKeyValueItem("apiHeaders");
+                }}
+                className="inline-flex w-fit rounded-full border border-border px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.06em] text-foreground transition hover:bg-muted"
               >
-                <option value="none">none</option>
-                <option value="json">json</option>
-                <option value="raw">raw</option>
-              </select>
-            </label>
+                Add header
+              </button>
+            )}
+
+            {showApiQueryParams ? (
+              <KeyValueEditor
+                label="Query params"
+                hint="Optional query parameters appended to the endpoint."
+                items={form.apiQueryParams}
+                addLabel="Add query param"
+                onAdd={() => addKeyValueItem("apiQueryParams")}
+                onChange={(id, field, value) =>
+                  changeKeyValueItem("apiQueryParams", id, field, value)
+                }
+                onRemove={(id) => removeKeyValueItem("apiQueryParams", id)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApiQueryParams(true);
+                  addKeyValueItem("apiQueryParams");
+                }}
+                className="inline-flex w-fit rounded-full border border-border px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.06em] text-foreground transition hover:bg-muted"
+              >
+                Add query param
+              </button>
+            )}
+
+            <SelectionChipGroup
+              label="Body type"
+              options={[...bodyTypeOptions]}
+              value={form.apiBodyType}
+              onChange={(value) =>
+                updateField("apiBodyType", value as NewBridgeFormState["apiBodyType"])
+              }
+            />
 
             {form.apiBodyType !== "none" ? (
               <label className="grid gap-1.5">
-                <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <span className="text-[0.78rem] font-semibold text-muted-foreground">
                   Body
                 </span>
                 <textarea
                   value={form.apiBody}
                   onChange={(event) => updateField("apiBody", event.target.value)}
-                  className="min-h-24 rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+                  className="min-h-24 w-full max-w-2xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
                   placeholder={
                     form.apiBodyType === "json"
                       ? '{ "key": "value" }'
@@ -469,65 +646,108 @@ export function NewBridgeForm({
               </label>
             ) : null}
 
-            <KeyValueEditor
-              label="Form data"
-              hint="Add multipart form data fields."
-              items={form.apiFormData}
-              addLabel="Add form field"
-              onAdd={() => addKeyValueItem("apiFormData")}
-              onChange={(id, field, value) =>
-                changeKeyValueItem("apiFormData", id, field, value)
-              }
-              onRemove={(id) => removeKeyValueItem("apiFormData", id)}
-            />
+            {showApiFormData ? (
+              <KeyValueEditor
+                label="Form data"
+                hint="Add multipart form data fields."
+                items={form.apiFormData}
+                addLabel="Add form field"
+                onAdd={() => addKeyValueItem("apiFormData")}
+                onChange={(id, field, value) =>
+                  changeKeyValueItem("apiFormData", id, field, value)
+                }
+                onRemove={(id) => removeKeyValueItem("apiFormData", id)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApiFormData(true);
+                  addKeyValueItem("apiFormData");
+                }}
+                className="inline-flex w-fit rounded-full border border-border px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.06em] text-foreground transition hover:bg-muted"
+              >
+                Add form field
+              </button>
+            )}
           </div>
         ) : null}
 
         {form.bridgeType === "grpc" ? (
-          <label className="grid gap-1.5">
-            <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Service name
-            </span>
-            <input
-              value={form.serviceName}
-              onChange={(event) => updateField("serviceName", event.target.value)}
-              className="rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
-              placeholder="BridgeService"
+          <div className="grid gap-4 rounded-lg border border-border bg-muted/20 p-4">
+            <label className="grid gap-1.5">
+              <span className="text-[0.78rem] font-semibold text-muted-foreground">
+                Service name
+              </span>
+              <input
+                value={form.serviceName}
+                onChange={(event) => updateField("serviceName", event.target.value)}
+                className="w-full max-w-xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+                placeholder="BridgeService"
+              />
+              {errors.serviceName ? (
+                <span className="text-[0.78rem] text-rose-600">{errors.serviceName}</span>
+              ) : null}
+            </label>
+
+            <KeyValueEditor
+              label="Required fields"
+              hint="List the fields this gRPC bridge expects before it can run."
+              items={form.requiredFields}
+              addLabel="Add required field"
+              onAdd={() => addKeyValueItem("requiredFields")}
+              onChange={(id, field, value) =>
+                changeKeyValueItem("requiredFields", id, field, value)
+              }
+              onRemove={(id) => removeKeyValueItem("requiredFields", id)}
             />
-            {errors.serviceName ? (
-              <span className="text-[0.78rem] text-rose-600">{errors.serviceName}</span>
-            ) : null}
-          </label>
+          </div>
         ) : null}
 
         {form.bridgeType === "webhook" || form.bridgeType === "handshake" ? (
-          <label className="grid gap-1.5">
-            <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              {form.bridgeType === "webhook" ? "Signing secret" : "Handshake key"}
-            </span>
-            <input
-              value={form.secret}
-              onChange={(event) => updateField("secret", event.target.value)}
-              className="rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
-              placeholder="••••••••••••"
+          <div className="grid gap-4 rounded-lg border border-border bg-muted/20 p-4">
+            <label className="grid gap-1.5">
+              <span className="text-[0.78rem] font-semibold text-muted-foreground">
+                {form.bridgeType === "webhook" ? "Signing secret" : "Handshake key"}
+              </span>
+              <input
+                value={form.secret}
+                onChange={(event) => updateField("secret", event.target.value)}
+                className="w-full max-w-xl rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+                placeholder="••••••••••••"
+              />
+              {errors.secret ? (
+                <span className="text-[0.78rem] text-rose-600">{errors.secret}</span>
+              ) : null}
+            </label>
+
+            <KeyValueEditor
+              label="Required fields"
+              hint="List the fields this bridge expects in the incoming request or payload."
+              items={form.requiredFields}
+              addLabel="Add required field"
+              onAdd={() => addKeyValueItem("requiredFields")}
+              onChange={(id, field, value) =>
+                changeKeyValueItem("requiredFields", id, field, value)
+              }
+              onRemove={(id) => removeKeyValueItem("requiredFields", id)}
             />
-            {errors.secret ? (
-              <span className="text-[0.78rem] text-rose-600">{errors.secret}</span>
-            ) : null}
-          </label>
+          </div>
         ) : null}
 
-        <label className="grid gap-1.5">
-          <span className="text-[0.78rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Notes (optional)
-          </span>
-          <textarea
-            value={form.notes}
-            onChange={(event) => updateField("notes", event.target.value)}
-            className="min-h-24 rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
-            placeholder="Any deployment or handshake notes..."
-          />
-        </label>
+        <RichTextField
+          label="Private note (optional)"
+          value={form.privateNote}
+          placeholder="Internal context, deployment details, or team-only notes..."
+          onChange={(value) => updateField("privateNote", value)}
+        />
+
+        <RichTextField
+          label="Public note (optional)"
+          value={form.publicNote}
+          placeholder="Public-facing note or bridge summary..."
+          onChange={(value) => updateField("publicNote", value)}
+        />
 
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <button

@@ -33,7 +33,7 @@ export function BridgeList() {
   }, []);
 
   return (
-    <section className="rounded-[1.1rem] border border-border bg-card p-6">
+    <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -53,11 +53,11 @@ export function BridgeList() {
         </Link>
       </div>
 
-      <div className="mt-5 border-t border-border pt-5">
+      <div className="pt-1">
         {!ready ? (
           <p className="text-[0.88rem] text-muted-foreground">Loading bridges...</p>
         ) : bridges.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-4 text-[0.88rem] text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-border px-4 py-4 text-[0.88rem] text-muted-foreground">
             No bridge saved yet. Click <span className="font-semibold">Add a bridge</span> to
             create your first one.
           </p>
@@ -66,7 +66,7 @@ export function BridgeList() {
             {bridges.map((bridge) => (
               <div
                 key={bridge.id}
-                className="rounded-lg border border-border bg-background px-4 py-3 transition hover:border-foreground/15 hover:bg-muted/25"
+                className="rounded-xl border border-border bg-background px-4 py-3 transition hover:border-foreground/15 hover:bg-muted/25"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <Link href={`/bridge/${bridge.id}`} className="min-w-0 flex-1">

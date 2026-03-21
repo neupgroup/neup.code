@@ -32,7 +32,7 @@ export function EditBridgePage({ id }: EditBridgePageProps) {
 
   if (!ready) {
     return (
-      <section className="rounded-[1.1rem] border border-border bg-card p-6">
+      <section>
         <p className="text-[0.9rem] text-muted-foreground">Loading bridge editor...</p>
       </section>
     );
@@ -40,7 +40,7 @@ export function EditBridgePage({ id }: EditBridgePageProps) {
 
   if (!bridge) {
     return (
-      <section className="rounded-[1.1rem] border border-border bg-card p-6">
+      <section>
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Bridge
         </p>
