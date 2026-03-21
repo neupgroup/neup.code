@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { loadBridgeRuns, loadBridges, type BridgeItem, type BridgeRunRecord } from "../bridge/bridge-storage";
-import { richTextHasContent, richTextToMarkdown } from "../bridge/rich-text";
+import { loadBridges, type BridgeItem } from "../../bridge/bridge-storage";
+import { richTextHasContent, richTextToMarkdown } from "../../bridge/rich-text";
 
 const ONBOARDING_STORAGE_KEY = "neup.code.onboarding.github-flow.v1";
 
@@ -80,44 +80,7 @@ function formatBridgeRequest(bridge: BridgeItem) {
   return lines.join("\n");
 }
 
-function formatBridgeRun(bridgeId: string, runRecord?: BridgeRunRecord) {
-  if (!runRecord) return "### Latest run\n\nNo run data available.";
-
-  const lines = [
-    "### Latest run",
-    "",
-    `- Status: ${runRecord.status}`,
-    `- Last run: ${runRecord.lastRunAt ?? "N/A"}`,
-    `- Request URL: ${runRecord.response?.requestUrl ?? "N/A"}`,
-    `- Status code: ${
-      runRecord.response?.statusCode
-        ? `${runRecord.response.statusCode}${runRecord.response.statusText ? ` ${runRecord.response.statusText}` : ""}`
-        : "N/A"
-    }`,
-    `- Duration: ${
-      typeof runRecord.response?.durationMs === "number" ? `${runRecord.response.durationMs}ms` : "N/A"
-    }`,
-  ];
-
-  if (runRecord.output) {
-    lines.push("", "#### Output", "", "```txt", runRecord.output, "```");
-  }
-
-  if (runRecord.response?.headers?.length) {
-    lines.push("", "#### Response headers", "");
-    lines.push(
-      ...runRecord.response.headers.map((header) => `- ${header.key}: ${header.value}`),
-    );
-  }
-
-  if (runRecord.response?.body) {
-    lines.push("", "#### Response body", "", "```txt", runRecord.response.body, "```");
-  }
-
-  return lines.join("\n");
-}
-
-function buildMarkdown(onboarding: OnboardingState, bridges: BridgeItem[], runs: Record<string, BridgeRunRecord>) {
+function buildMarkdown(onboarding: OnboardingState, bridges: BridgeItem[]) {
   const sections: string[] = [
     "# Neup.Code export",
     "",
@@ -172,8 +135,6 @@ function buildMarkdown(onboarding: OnboardingState, bridges: BridgeItem[], runs:
     if (notesSection) {
       sections.push("", notesSection);
     }
-
-    sections.push("", formatBridgeRun(bridge.id, runs[bridge.id]));
   });
 
   return sections.join("\n");
@@ -184,7 +145,6 @@ export function PublishExport() {
   const [copied, setCopied] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingState>({});
   const [bridges, setBridges] = useState<BridgeItem[]>([]);
-  const [runs, setRuns] = useState<Record<string, BridgeRunRecord>>({});
 
   useEffect(() => {
     try {
@@ -198,11 +158,10 @@ export function PublishExport() {
     }
 
     setBridges(loadBridges());
-    setRuns(loadBridgeRuns());
     setReady(true);
   }, []);
 
-  const markdown = useMemo(() => buildMarkdown(onboarding, bridges, runs), [onboarding, bridges, runs]);
+  const markdown = useMemo(() => buildMarkdown(onboarding, bridges), [onboarding, bridges]);
 
   function downloadMarkdown() {
     const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
@@ -230,7 +189,7 @@ export function PublishExport() {
           </h1>
           <p className="max-w-2xl text-[0.9rem] leading-[1.5] text-muted-foreground">
             Generate a Markdown export from the data saved in this browser, including onboarding state,
-            bridge configuration, notes, and bridge run output.
+            bridge configuration, and notes.
           </p>
         </div>
       </div>

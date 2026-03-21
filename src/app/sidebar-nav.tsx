@@ -9,6 +9,7 @@ type SidebarIconName =
   | "design"
   | "home"
   | "onboarding"
+  | "settings"
 
 type SidebarLink = {
   href: string;
@@ -34,6 +35,10 @@ const sidebarGroups: SidebarGroup[] = [
   {
     title: "Bridge",
     links: [{ href: "/bridge", label: "Bridge", icon: "bridge" }],
+  },
+  {
+    title: "Settings",
+    links: [{ href: "/settings", label: "Settings", icon: "settings" }],
   },
 ];
 
@@ -85,6 +90,13 @@ function SidebarIcon({ name }: { name: SidebarIconName }) {
       return (
         <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M3.5 12h5M15.5 12h5M8.5 12a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+          <path d="M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.4.8a7.3 7.3 0 0 0-1.7-1L14.4 3h-4.8l-.4 2.8a7.3 7.3 0 0 0-1.7 1l-2.4-.8-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .3 0 .7.1 1l-2 1.6 2 3.4 2.4-.8c.5.4 1.1.7 1.7 1l.4 2.8h4.8l.4-2.8c.6-.3 1.2-.6 1.7-1l2.4.8 2-3.4-2-1.6c.1-.3.1-.7.1-1Z" />
         </svg>
       );
     default:
