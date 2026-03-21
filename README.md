@@ -44,7 +44,31 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:2633](http://localhost:2633) with your browser to see the result.
+
+### CSS / Tailwind Troubleshooting
+
+If styles look stale or missing, use the reset workflow:
+
+```bash
+npm run dev:reset
+```
+
+This command:
+
+1. Stops stale Next.js processes using the app port (`2633`) if found.
+2. Clears the `.next` cache.
+3. Starts a fresh dev server.
+
+If you only want to clear cache:
+
+```bash
+npm run clean
+```
+
+Also avoid dynamic Tailwind class construction like `text-${color}-500` in runtime
+strings. Keep class names static in source files so Tailwind can detect and generate
+them.
 
 You can start editing the page by modifying `src/app/page.tsx`. The page auto-updates as you edit the file.
 
