@@ -125,6 +125,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   const [bridge, setBridge] = useState<BridgeItem | null>(null);
   const [ready, setReady] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [runRecord, setRunRecord] = useState<BridgeRunRecord>({
     bridgeId: id,
@@ -299,15 +300,10 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   function removeBridge() {
     if (!bridge || isDeleting) return;
 
-    const confirmed = window.confirm(
-      `Delete bridge "${bridge.name}"? This will remove its saved config and run history from this browser.`,
-    );
-
-    if (!confirmed) return;
-
     setIsDeleting(true);
     deleteBridge(bridge.id);
     deleteBridgeRun(bridge.id);
+    setIsDeleteDialogOpen(false);
     router.push("/bridge");
     router.refresh();
   }
@@ -654,13 +650,49 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
           </button>
           <button
             type="button"
-            onClick={removeBridge}
+            onClick={() => setIsDeleteDialogOpen(true)}
             disabled={isDeleting}
             className="inline-flex rounded-full border border-rose-200 px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
           >
             {isDeleting ? "Deleting..." : "Delete bridge"}
           </button>
         </div>
+
+        {isDeleteDialogOpen && bridge ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 px-4 backdrop-blur-[2px]">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-[0_18px_60px_rgba(15,23,42,0.16)]">
+              <div className="space-y-2">
+                <p className="text-[0.76rem] font-semibold text-muted-foreground">Delete bridge</p>
+                <h2 className="text-[1.2rem] font-semibold tracking-[-0.02em] text-foreground">
+                  Remove {bridge.name}?
+                </h2>
+                <p className="text-[0.9rem] leading-[1.5] text-muted-foreground">
+                  This will remove the bridge configuration and its saved run history from this
+                  browser.
+                </p>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  disabled={isDeleting}
+                  className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-foreground transition hover:bg-muted disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={removeBridge}
+                  disabled={isDeleting}
+                  className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-rose-600 transition hover:bg-rose-100 disabled:opacity-60"
+                >
+                  {isDeleting ? "Deleting..." : "Delete bridge"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
   );
 }
