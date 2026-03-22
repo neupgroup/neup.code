@@ -8,6 +8,7 @@ import {
   BRIDGE_STORAGE_KEY,
   loadBridges,
   saveBridges,
+  deleteBridge,
   type BridgeItem,
 } from "./bridge/bridge-storage";
 import { getPageDocHref } from "./bridge/paths";
@@ -16,6 +17,7 @@ import { loadWorkspaces, WORKSPACE_STORAGE_EVENT } from "./workspace/workspace-s
 type SidebarIconName =
   | "bridge"
   | "home"
+  | "more-vertical"
   | "onboarding"
   | "page"
   | "plus"
@@ -133,6 +135,14 @@ function SidebarIcon({ name }: { name: SidebarIconName }) {
           <path d="M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.4.8a7.3 7.3 0 0 0-1.7-1L14.4 3h-4.8l-.4 2.8a7.3 7.3 0 0 0-1.7 1l-2.4-.8-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .3 0 .7.1 1l-2 1.6 2 3.4 2.4-.8c.5.4 1.1.7 1.7 1l.4 2.8h4.8l.4-2.8c.6-.3 1.2-.6 1.7-1l2.4.8 2-3.4-2-1.6c.1-.3.1-.7.1-1Z" />
         </svg>
       );
+    case "more-vertical":
+      return (
+        <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="1.5" />
+          <circle cx="12" cy="5" r="1.5" />
+          <circle cx="12" cy="19" r="1.5" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -145,6 +155,45 @@ export function SidebarNav() {
   const docId = searchParams.get("id");
   const [notePages, setNotePages] = useState<BridgeItem[]>([]);
   const [workspaceName, setWorkspaceName] = useState("Workspace");
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    page: BridgeItem;
+  } | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside() {
+      setContextMenu(null);
+    }
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, []);
+
+  async function handleCut(page: BridgeItem) {
+    try {
+      await navigator.clipboard.writeText(window.location.origin + getPageDocHref(page.id));
+      // In a full implementation, cut would mark item to be moved.
+      // deleteBridge(page.id); // Not deleting immediately to prevent data loss without paste
+    } catch {}
+  }
+
+  async function handleCopy(page: BridgeItem) {
+    try {
+      await navigator.clipboard.writeText(window.location.origin + getPageDocHref(page.id));
+    } catch {}
+  }
+
+  async function handleCopyLinked(page: BridgeItem) {
+    try {
+      await navigator.clipboard.writeText(`[${page.name}](${window.location.origin}${getPageDocHref(page.id)})`);
+    } catch {}
+  }
+
+  function handleDelete(page: BridgeItem) {
+    deleteBridge(page.id);
+  }
 
   useEffect(() => {
     function syncWorkspace() {
@@ -225,7 +274,6 @@ export function SidebarNav() {
     };
     const nextBridges = [...loadBridges(), nextPage];
     saveBridges(nextBridges);
-    setNotePages((current) => [...current, nextPage]);
     router.push(getPageDocHref(nextPage.id));
   }
 
@@ -270,19 +318,44 @@ export function SidebarNav() {
             const isActive = pathname === "/doc" && docId === page.id;
 
             return (
-              <Link
-                key={page.id}
-                href={href}
-                aria-current={isActive ? "page" : undefined}
-                className={`flex h-10 items-center gap-2 rounded-xl px-3 text-[0.93rem] font-semibold tracking-[0] transition ${
-                  isActive
-                    ? "bg-muted text-foreground"
-                    : "text-foreground/75 hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <SidebarIcon name="page" />
-                <span className="truncate">{page.name?.trim() || "Untitled page"}</span>
-              </Link>
+              <div key={page.id} className="group relative flex items-center">
+                <Link
+                  href={href}
+                  aria-current={isActive ? "page" : undefined}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      page,
+                    });
+                  }}
+                  className={`flex h-10 flex-1 items-center gap-2 rounded-xl px-3 text-[0.93rem] font-semibold tracking-[0] transition ${
+                    isActive
+                      ? "bg-muted text-foreground"
+                      : "text-foreground/75 hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <SidebarIcon name="page" />
+                  <span className="truncate pr-6">{page.name?.trim() || "Untitled page"}</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      page,
+                    });
+                  }}
+                  className="absolute right-2 opacity-0 group-[&:hover]:opacity-100 flex h-7 w-7 items-center justify-center rounded-lg hover:bg-background text-foreground/50 hover:text-foreground transition-all"
+                  aria-label="More options"
+                >
+                  <SidebarIcon name="more-vertical" />
+                </button>
+              </div>
             );
           })}
           <button
@@ -295,6 +368,44 @@ export function SidebarNav() {
           </button>
         </div>
       </div>
+
+      {contextMenu && (
+        <div
+          className="fixed z-50 min-w-[160px] overflow-hidden rounded-xl border border-border bg-background p-1 text-sm text-foreground shadow-md"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center rounded-lg px-2 py-1.5 hover:bg-muted text-left transition-colors"
+            onClick={() => { handleCut(contextMenu.page); setContextMenu(null); }}
+          >
+            Cut
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center rounded-lg px-2 py-1.5 hover:bg-muted text-left transition-colors"
+            onClick={() => { handleCopy(contextMenu.page); setContextMenu(null); }}
+          >
+            Copy
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center rounded-lg px-2 py-1.5 hover:bg-muted text-left transition-colors"
+            onClick={() => { handleCopyLinked(contextMenu.page); setContextMenu(null); }}
+          >
+            Copy Linked
+          </button>
+          <hr className="my-1 border-border" />
+          <button
+            type="button"
+            className="flex w-full items-center rounded-lg px-2 py-1.5 text-red-500 hover:bg-muted hover:text-red-600 text-left transition-colors"
+            onClick={() => { handleDelete(contextMenu.page); setContextMenu(null); }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </nav>
   );
 }
