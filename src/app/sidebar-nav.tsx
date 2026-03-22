@@ -23,7 +23,10 @@ type SidebarIconName =
   | "plus"
   | "profile"
   | "settings"
-  | "workspace";
+  | "workspace"
+  | "search"
+  | "inbox"
+  | "trash";
 
 type SidebarLink = {
   href: string;
@@ -40,10 +43,18 @@ const sidebarGroups: SidebarGroup[] = [
   {
     title: "Main",
     links: [
+      { href: "/search", label: "Search", icon: "search" },
       { href: "/home", label: "Home", icon: "home" },
-      { href: "https://neupgroup.com/account", label: "Profile", icon: "profile" },
+      { href: "/inbox", label: "Inbox", icon: "inbox" },
+    ],
+  },
+  {
+    title: "System",
+    links: [
       { href: "/workspace", label: "Workspace", icon: "workspace" },
+      { href: "https://neupgroup.com/account", label: "Profile", icon: "profile" },
       { href: "/settings", label: "Settings", icon: "settings" },
+      { href: "/trash", label: "Trash", icon: "trash" },
     ],
   },
 ];
@@ -137,6 +148,27 @@ function SidebarIcon({ name }: { name: SidebarIconName }) {
           <circle cx="12" cy="12" r="1.5" />
           <circle cx="12" cy="5" r="1.5" />
           <circle cx="12" cy="19" r="1.5" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+      );
+    case "inbox":
+      return (
+        <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+        </svg>
+      );
+    case "trash":
+      return (
+        <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
         </svg>
       );
     default:
@@ -346,9 +378,12 @@ export function SidebarNav() {
               onClick={() => {
                 if (!isExpanded) setExpandedWorkspaceId(ws.id);
               }}
-              className="w-full text-left block py-1"
+              className="group flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left transition hover:bg-muted"
             >
-              <p className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground transition-colors truncate" title={ws.name}>
+              <div className="flex h-5 w-5 items-center justify-center shrink-0 text-muted-foreground group-hover:text-foreground">
+                <SidebarIcon name="workspace" />
+              </div>
+              <p className="text-[0.93rem] font-semibold tracking-[0] text-foreground/75 group-hover:text-foreground transition-colors truncate" title={ws.name}>
                 {ws.name}
               </p>
             </button>
