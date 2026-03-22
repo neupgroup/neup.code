@@ -43,7 +43,6 @@ const sidebarGroups: SidebarGroup[] = [
   {
     title: "Main",
     links: [
-      { href: "/search", label: "Search", icon: "search" },
       { href: "/home", label: "Home", icon: "home" },
       { href: "/inbox", label: "Inbox", icon: "inbox" },
     ],
@@ -330,14 +329,22 @@ export function SidebarNav() {
     router.push(getPageDocHref(nextPage.id));
   }
 
+  const visibleWorkspaces = [...workspaces]
+    .filter((ws) => !ws.isHidden)
+    .sort((a, b) => {
+      if (a.isDefault && !b.isDefault) return -1;
+      if (!a.isDefault && b.isDefault) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
   return (
-    <nav className="space-y-7">
+    <nav className="space-y-4">
       {sidebarGroups.map((group) => (
         <div key={group.title} className="space-y-2">
           <p className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {group.title}
           </p>
-          <div className="space-y-1">
+          <div className="flex flex-col gap-0.5">
             {group.links.map((item) => {
               const isActive = isActivePath(pathname, docId, item.href);
 
@@ -346,7 +353,7 @@ export function SidebarNav() {
                   key={item.label}
                   href={item.href}
                   aria-current={isActive ? "page" : undefined}
-                  className={`flex h-10 items-center gap-2 rounded-xl px-3 text-[0.93rem] font-semibold tracking-[0] transition ${
+                  className={`flex h-9 items-center gap-2 rounded-xl px-3 text-[0.93rem] font-semibold tracking-[0] transition ${
                     isActive
                       ? "bg-muted text-foreground"
                       : "text-foreground/75 hover:bg-muted hover:text-foreground"
@@ -361,24 +368,19 @@ export function SidebarNav() {
         </div>
       ))}
 
-      {workspaces
-        .filter(ws => !ws.isHidden)
-        .sort((a, b) => {
-          if (a.isDefault && !b.isDefault) return -1;
-          if (!a.isDefault && b.isDefault) return 1;
-          return a.name.localeCompare(b.name);
-        })
-        .map((ws) => {
+      {visibleWorkspaces.length > 0 &&
+        <div className="space-y-1 pt-2">
+          {visibleWorkspaces.map((ws) => {
         const isExpanded = expandedWorkspaceId === ws.id;
 
         return (
-          <div key={ws.id} className="flex flex-col gap-1">
+          <div key={ws.id} className="flex flex-col gap-0.5">
             <button 
               type="button" 
               onClick={() => {
                 setExpandedWorkspaceId(isExpanded ? null : ws.id);
               }}
-              className="group flex h-10 w-full items-center rounded-xl px-3 text-left transition hover:bg-muted"
+              className="group flex h-9 w-full items-center rounded-xl px-3 text-left transition hover:bg-muted"
             >
               <div className="flex min-w-0 items-center gap-2">
                 <p
@@ -405,7 +407,7 @@ export function SidebarNav() {
               style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
             >
               <div className="overflow-hidden min-h-0">
-                <div className="space-y-1 pt-1 pb-1">
+                <div className="flex flex-col gap-0.5 pt-0.5 pb-0.5">
                   {notePages.filter(p => p.workspaceId === ws.id || (!p.workspaceId && ws.isDefault)).map((page) => {
                     const href = getPageDocHref(page.id);
                     const isExplicitlyActive = (pathname === "/doc" && docId === page.id);
@@ -430,7 +432,7 @@ export function SidebarNav() {
                               page,
                             });
                           }}
-                          className="flex h-10 flex-1 items-center gap-2 px-3 text-[0.93rem] font-semibold tracking-[0]"
+                          className="flex h-9 flex-1 items-center gap-2 px-3 text-[0.93rem] font-semibold tracking-[0]"
                         >
                           <SidebarIcon name="page" />
                           <span className="truncate pr-6">{page.name?.trim() || "Untitled page"}</span>
@@ -460,7 +462,7 @@ export function SidebarNav() {
                   <button
                     type="button"
                     onClick={() => handleAddPage(ws.name, ws.id)}
-                    className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-[0.93rem] font-semibold tracking-[0] text-foreground/75 transition hover:bg-muted hover:text-foreground"
+                    className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-[0.93rem] font-semibold tracking-[0] text-foreground/75 transition hover:bg-muted hover:text-foreground"
                   >
                     <SidebarIcon name="plus" />
                     Add a page
@@ -471,6 +473,8 @@ export function SidebarNav() {
           </div>
         );
       })}
+        </div>
+      }
 
       {contextMenu && (
         <div
