@@ -57,10 +57,6 @@ function isActivePath(currentPathname: string, currentDocId: string | null, href
     return currentPathname === "/home" || currentPathname === "/";
   }
 
-  if (href === "/workspace") {
-    return currentPathname === "/workspace";
-  }
-
   if (href === "/doc") {
     return (
       (currentPathname === "/doc" && !currentDocId) ||
@@ -155,11 +151,30 @@ export function SidebarNav() {
   const docId = searchParams.get("id");
   const [notePages, setNotePages] = useState<BridgeItem[]>([]);
   const [workspaceName, setWorkspaceName] = useState("Workspace");
+  const [accessedFrom, setAccessedFrom] = useState<string[] | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
     page: BridgeItem;
   } | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.sessionStorage.getItem("accessed_from");
+      if (stored) {
+        setAccessedFrom(JSON.parse(stored));
+      }
+    } catch {}
+  }, []);
+
+  function handlePageClick(page: BridgeItem, href: string) {
+    const data = [workspaceName, page.name?.trim() || "Untitled page", href];
+    setAccessedFrom(data);
+    try {
+      window.sessionStorage.setItem("accessed_from", JSON.stringify(data));
+      (window as any).accessedFrom = data;
+    } catch {}
+  }
 
   useEffect(() => {
     function handleClickOutside() {
@@ -274,6 +289,7 @@ export function SidebarNav() {
     };
     const nextBridges = [...loadBridges(), nextPage];
     saveBridges(nextBridges);
+    handlePageClick(nextPage, getPageDocHref(nextPage.id));
     router.push(getPageDocHref(nextPage.id));
   }
 
@@ -315,12 +331,16 @@ export function SidebarNav() {
         <div className="space-y-1">
           {notePages.map((page) => {
             const href = getPageDocHref(page.id);
-            const isActive = pathname === "/doc" && docId === page.id;
+            const isExplicitlyActive = (pathname === "/doc" && docId === page.id);
+            const isDocContext = pathname === "/doc" || pathname.startsWith("/bridge");
+            const isAccessedRoot = isDocContext && accessedFrom?.[2] === href;
+            const isActive = isExplicitlyActive || isAccessedRoot;
 
             return (
               <div key={page.id} className="group relative flex items-center">
                 <Link
                   href={href}
+                  onClick={() => handlePageClick(page, href)}
                   aria-current={isActive ? "page" : undefined}
                   onContextMenu={(e) => {
                     e.preventDefault();
