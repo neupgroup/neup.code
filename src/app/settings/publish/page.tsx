@@ -3,7 +3,7 @@ import { PublishExport } from "./publish-export";
 
 export const metadata: Metadata = {
   title: "Publish",
-  description: "Export saved app data as Markdown.",
+  description: "Export saved workspace data and docs as Markdown.",
 };
 
 export default function PublishPage() {

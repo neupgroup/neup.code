@@ -37,7 +37,7 @@ export default function SettingsPage() {
         >
           <p className="text-[0.96rem] font-semibold text-foreground">Publish</p>
           <p className="mt-1 text-[0.86rem] text-muted-foreground">
-            Export your saved bridges and components as Markdown in a zip archive.
+            Export your saved workspace docs, bridges, and components as Markdown in a zip archive.
           </p>
         </Link>
       </div>

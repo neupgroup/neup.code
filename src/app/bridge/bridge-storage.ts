@@ -1,5 +1,13 @@
+import { cleanupOrphanedWorkspaceBridgeBlocks } from "../page-blocks-storage";
+
 export type BridgeType = "api" | "webhook" | "grpc" | "handshake";
-export type BridgeEntryKind = "bridge" | "chapter" | "note";
+export type BridgeEntryKind =
+  | "bridge"
+  | "chapter"
+  | "note"
+  | "heading1"
+  | "heading2"
+  | "heading3";
 
 export type BridgeKeyValueItem = {
   id: string;
@@ -59,7 +67,14 @@ function isBridgeType(value: string): value is BridgeType {
 }
 
 function isBridgeEntryKind(value: string): value is BridgeEntryKind {
-  return value === "bridge" || value === "chapter" || value === "note";
+  return (
+    value === "bridge" ||
+    value === "chapter" ||
+    value === "note" ||
+    value === "heading1" ||
+    value === "heading2" ||
+    value === "heading3"
+  );
 }
 
 function isEnvironment(
@@ -124,6 +139,7 @@ export function loadBridges(): BridgeItem[] {
 export function saveBridges(items: BridgeItem[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(BRIDGE_STORAGE_KEY, JSON.stringify(items));
+  cleanupOrphanedWorkspaceBridgeBlocks(items.map((item) => item.id));
 }
 
 export function deleteBridge(id: string) {

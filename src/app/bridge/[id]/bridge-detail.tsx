@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   BRIDGE_RUN_STORAGE_KEY,
   BRIDGE_STORAGE_KEY,
@@ -16,13 +16,17 @@ import {
   type BridgeItem,
   type BridgeRunRecord,
 } from "../bridge-storage";
-import { normalizeRichTextHtml, richTextHasContent } from "../rich-text";
+import { InlineNoteBlock, type SlashCommand } from "../inline-note-block";
+import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../rich-text";
 import {
   BRIDGE_SESSION_STORAGE_KEY,
   clearBridgeClipboard,
   loadBridgeSessionState,
+  setBridgeClipboard,
+  type BridgeSessionClipboardAction,
   type BridgeSessionClipboard,
 } from "../session-manager";
+import { getBridgeDocRootHref, getBridgeEntryHref, getChapterDocHref } from "../paths";
 
 function createId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -38,7 +42,193 @@ function bridgeTypeLabel(type: BridgeItem["bridgeType"]) {
 function bridgeEntryKindLabel(kind: BridgeItem["entryKind"]) {
   if (kind === "chapter") return "Chapter";
   if (kind === "note") return "Note";
+  if (kind === "heading1") return "Heading 1";
+  if (kind === "heading2") return "Heading 2";
+  if (kind === "heading3") return "Heading 3";
   return "Bridge";
+}
+
+function isHeadingEntryKind(
+  kind: BridgeItem["entryKind"],
+): kind is "heading1" | "heading2" | "heading3" {
+  return kind === "heading1" || kind === "heading2" || kind === "heading3";
+}
+
+function isTextEntryKind(
+  kind: BridgeItem["entryKind"],
+): kind is "note" | "heading1" | "heading2" | "heading3" {
+  return kind === "note" || isHeadingEntryKind(kind);
+}
+
+type HeadingEntryKind = Extract<BridgeItem["entryKind"], "heading1" | "heading2" | "heading3">;
+
+function headingEditorClassName(kind: BridgeItem["entryKind"]) {
+  if (kind === "heading1") {
+    return "text-[1.55rem] font-semibold tracking-[-0.02em] leading-[1.2]";
+  }
+
+  if (kind === "heading2") {
+    return "text-[1.25rem] font-semibold tracking-[-0.018em] leading-[1.3]";
+  }
+
+  if (kind === "heading3") {
+    return "text-[1.06rem] font-semibold tracking-[-0.012em] leading-[1.4]";
+  }
+
+  return "";
+}
+
+function textBlockPlaceholder(kind: BridgeItem["entryKind"]) {
+  if (kind === "heading1") return "Heading 1";
+  if (kind === "heading2") return "Heading 2";
+  if (kind === "heading3") return "Heading 3";
+  return "Continue typing, or type / for commands";
+}
+
+function bridgeCommandToEntryKind(command: string) {
+  if (command === "/p") return "note" as const;
+  if (command === "/h1" || command === "#") return "heading1" as const;
+  if (command === "/h2" || command === "##") return "heading2" as const;
+  if (command === "/h3" || command === "###") return "heading3" as const;
+  return null;
+}
+
+function createCommandBlock(command: string, parentChapterId: string | null): BridgeItem | null {
+  if (command === "/chapter") {
+    return {
+      ...createTextBlock("chapter", parentChapterId),
+      name: "Untitled chapter",
+    };
+  }
+
+  if (command === "/api") {
+    return {
+      ...createTextBlock("bridge", parentChapterId),
+      name: "Untitled API bridge",
+      bridgeType: "api",
+      method: "GET",
+    };
+  }
+
+  if (command === "/webhook") {
+    return {
+      ...createTextBlock("bridge", parentChapterId),
+      name: "Untitled webhook bridge",
+      bridgeType: "webhook",
+    };
+  }
+
+  if (command === "/grpc") {
+    return {
+      ...createTextBlock("bridge", parentChapterId),
+      name: "Untitled gRPC bridge",
+      bridgeType: "grpc",
+    };
+  }
+
+  return null;
+}
+
+const BRIDGE_SLASH_COMMANDS: SlashCommand[] = [
+  {
+    id: "p",
+    label: "Paragraph",
+    description: "Standard text block",
+    keywords: ["p", "paragraph", "text"],
+  },
+  {
+    id: "chapter",
+    label: "Chapter",
+    description: "Create a chapter block",
+    keywords: ["chapter"],
+  },
+  {
+    id: "h1",
+    label: "Heading 1",
+    description: "Large section heading",
+    keywords: ["h1", "#", "heading"],
+  },
+  {
+    id: "h2",
+    label: "Heading 2",
+    description: "Medium section heading",
+    keywords: ["h2", "##", "heading"],
+  },
+  {
+    id: "h3",
+    label: "Heading 3",
+    description: "Small section heading",
+    keywords: ["h3", "###", "heading"],
+  },
+  {
+    id: "api",
+    label: "API bridge",
+    description: "Create an API bridge block",
+    keywords: ["api", "http", "request"],
+  },
+  {
+    id: "webhook",
+    label: "Webhook bridge",
+    description: "Create a webhook bridge block",
+    keywords: ["webhook"],
+  },
+  {
+    id: "grpc",
+    label: "gRPC bridge",
+    description: "Create a gRPC bridge block",
+    keywords: ["grpc"],
+  },
+];
+
+function createTextBlock(
+  kind: BridgeItem["entryKind"] = "note",
+  parentChapterId: string | null = null,
+): BridgeItem {
+  return {
+    id: createId(),
+    name: kind === "note" ? "Untitled note" : bridgeEntryKindLabel(kind),
+    entryKind: kind,
+    parentChapterId,
+    bridgeType: "api",
+    endpoint: "",
+    environment: "development",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function ensureTrailingChapterNote(items: BridgeItem[], chapterId: string) {
+  const chapterItems = items.filter((item) => item.parentChapterId === chapterId);
+  const lastChapterItem = chapterItems[chapterItems.length - 1];
+
+  if (lastChapterItem?.entryKind === "note") {
+    return items;
+  }
+
+  const nextNote = createTextBlock("note", chapterId);
+
+  if (!chapterItems.length) {
+    return [...items, nextNote];
+  }
+
+  const lastChapterItemIndex = items.findLastIndex((item) => item.parentChapterId === chapterId);
+  if (lastChapterItemIndex === -1) {
+    return [...items, nextNote];
+  }
+
+  const nextItems = [...items];
+  nextItems.splice(lastChapterItemIndex + 1, 0, nextNote);
+  return nextItems;
+}
+
+function areSameBridgeOrder(left: BridgeItem[], right: BridgeItem[]) {
+  return (
+    left.length === right.length &&
+    left.every((item, index) => item.id === right[index]?.id)
+  );
+}
+
+function isModifierSelection(event: { ctrlKey: boolean; metaKey: boolean }) {
+  return event.ctrlKey || event.metaKey;
 }
 
 function duplicateKeyValueItems(items?: BridgeKeyValueItem[]) {
@@ -98,6 +288,10 @@ function buildRunOutput(bridge: BridgeItem) {
   return lines.join("\n");
 }
 
+function stripHtml(html: string) {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function keyValueItemsToUrl(url: string, items: BridgeKeyValueItem[]) {
   const nextUrl = new URL(url);
 
@@ -135,18 +329,33 @@ type BridgeDetailProps = {
 
 export function BridgeDetail({ id }: BridgeDetailProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [bridge, setBridge] = useState<BridgeItem | null>(null);
+  const [parentBridge, setParentBridge] = useState<BridgeItem | null>(null);
   const [ready, setReady] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [clipboard, setClipboard] = useState<BridgeSessionClipboard | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    targetId?: string | null;
+  } | null>(null);
   const [pasteMessage, setPasteMessage] = useState<string | null>(null);
+  const [selectedChapterBlockIds, setSelectedChapterBlockIds] = useState<string[]>([]);
+  const [deleteChapterBlockIds, setDeleteChapterBlockIds] = useState<string[]>([]);
+  const [isDeletingChapterBlocks, setIsDeletingChapterBlocks] = useState(false);
+  const [focusedChildNoteTarget, setFocusedChildNoteTarget] = useState<{
+    id: string;
+    position: "start" | "end";
+  } | null>(null);
   const [runRecord, setRunRecord] = useState<BridgeRunRecord>({
     bridgeId: id,
     status: "idle",
   });
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ left: number; top: number } | null>(null);
   const hasRunActivity = runRecord.status !== "idle";
   const isBridgeEntry = (bridge?.entryKind ?? "bridge") === "bridge";
   const apiHeaders = bridge?.apiConfig ? cleanKeyValueItems(bridge.apiConfig.headers) : [];
@@ -157,11 +366,280 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     bridge?.apiConfig?.bodyType !== "none" && Boolean(bridge?.apiConfig?.body);
   const normalizedPrivateNote = normalizeRichTextHtml(bridge?.privateNote ?? "");
   const normalizedPublicNote = normalizeRichTextHtml(bridge?.publicNote ?? bridge?.notes ?? "");
+  const chapterBlocks =
+    bridge?.entryKind === "chapter"
+      ? loadBridges().filter((item) => item.parentChapterId === bridge.id)
+      : [];
+
+  function syncBridgeState(targetId = id) {
+    const loadedBridges = loadBridges();
+    const loadedBridge = loadedBridges.find((item) => item.id === targetId) ?? null;
+
+    let normalizedBridges = loadedBridges;
+    if (loadedBridge?.entryKind === "chapter") {
+      normalizedBridges = ensureTrailingChapterNote(loadedBridges, loadedBridge.id);
+      if (!areSameBridgeOrder(loadedBridges, normalizedBridges)) {
+        saveBridges(normalizedBridges);
+      }
+    }
+
+    const nextBridge = normalizedBridges.find((item) => item.id === targetId) ?? null;
+    setBridge(nextBridge);
+    setParentBridge(
+      nextBridge?.parentChapterId
+        ? normalizedBridges.find((item) => item.id === nextBridge.parentChapterId) ?? null
+        : null,
+    );
+  }
+
+  function persistChapterBridges(nextBridges: BridgeItem[]) {
+    if (!bridge || bridge.entryKind !== "chapter") {
+      saveBridges(nextBridges);
+      syncBridgeState();
+      return nextBridges;
+    }
+
+    const normalizedBridges = ensureTrailingChapterNote(nextBridges, bridge.id);
+    saveBridges(normalizedBridges);
+    syncBridgeState();
+    return normalizedBridges;
+  }
+
+  function saveClipboardSelection(
+    action: BridgeSessionClipboardAction,
+    targetBlocks: BridgeItem[],
+  ) {
+    if (!targetBlocks.length) return;
+
+    const nextClipboard: BridgeSessionClipboard = {
+      action,
+      createdAt: new Date().toISOString(),
+      items: targetBlocks.map((item) => ({
+        id: item.id,
+        name: item.name,
+        entryKind: item.entryKind ?? "bridge",
+      })),
+    };
+
+    setBridgeClipboard(nextClipboard);
+    setClipboard(nextClipboard);
+    setSelectedChapterBlockIds(targetBlocks.map((item) => item.id));
+    setContextMenu(null);
+  }
+
+  function getContextBlock() {
+    if (!contextMenu?.targetId) return null;
+    return chapterBlocks.find((item) => item.id === contextMenu.targetId) ?? null;
+  }
+
+  function toggleChapterBlockSelection(blockId: string) {
+    setSelectedChapterBlockIds((current) =>
+      current.includes(blockId)
+        ? current.filter((id) => id !== blockId)
+        : [...current, blockId],
+    );
+  }
+
+  function getActionTargetBlocks(contextBlockId: string) {
+    const targetIds = selectedChapterBlockIds.includes(contextBlockId)
+      ? selectedChapterBlockIds
+      : [contextBlockId];
+
+    return chapterBlocks.filter((item) => targetIds.includes(item.id));
+  }
+
+  function updateNoteContent(value: string) {
+    if (!bridge || bridge.entryKind !== "note") return;
+
+    const normalizedValue = normalizeRichTextHtml(value);
+    const nextBridge: BridgeItem = {
+      ...bridge,
+      publicNote: normalizedValue || undefined,
+      notes: undefined,
+    };
+
+    const allBridges = loadBridges();
+    const nextBridges = allBridges.map((item) => (item.id === bridge.id ? nextBridge : item));
+    saveBridges(nextBridges);
+    setBridge(nextBridge);
+    setParentBridge(
+      nextBridge.parentChapterId
+        ? allBridges.find((item) => item.id === nextBridge.parentChapterId) ?? null
+        : null,
+    );
+  }
+
+  function updateChildNoteContent(noteId: string, value: string) {
+    const normalizedValue = normalizeRichTextHtml(value);
+    const allBridges = loadBridges();
+    const nextBridges = allBridges.map((item) =>
+      item.id === noteId
+        ? {
+            ...item,
+            publicNote: normalizedValue || undefined,
+            notes: undefined,
+          }
+        : item,
+    );
+
+    persistChapterBridges(nextBridges);
+  }
+
+  function createChildNoteAfter(noteId: string) {
+    if (!bridge) return;
+
+    const nextNote = createTextBlock("note", bridge.id);
+
+    const allBridges = loadBridges();
+    const sourceIndex = allBridges.findIndex((item) => item.id === noteId);
+    if (sourceIndex === -1) return;
+
+    const nextBridges = [...allBridges];
+    nextBridges.splice(sourceIndex + 1, 0, nextNote);
+    persistChapterBridges(nextBridges);
+    setFocusedChildNoteTarget({ id: nextNote.id, position: "end" });
+  }
+
+  function handleChildTextBlockSplit(blockId: string) {
+    const allBridges = loadBridges();
+    const currentBlock = allBridges.find((item) => item.id === blockId);
+    if (!bridge || !currentBlock || !isTextEntryKind(currentBlock.entryKind)) return;
+
+    if (currentBlock.entryKind === "note") {
+      const command = richTextToPlainText(currentBlock.publicNote ?? currentBlock.notes ?? "");
+      const nextKind: HeadingEntryKind | "note" | null = bridgeCommandToEntryKind(command);
+
+      if (nextKind) {
+        const nextBridges = allBridges.map((item) =>
+          item.id === blockId
+            ? {
+                ...item,
+                name: nextKind === "note" ? "Untitled note" : bridgeEntryKindLabel(nextKind),
+                entryKind: nextKind,
+                publicNote: undefined,
+                notes: undefined,
+              }
+            : item,
+        );
+
+        persistChapterBridges(nextBridges);
+        setFocusedChildNoteTarget({ id: blockId, position: "end" });
+        return;
+      }
+
+      const commandBlock = createCommandBlock(command, bridge.id);
+      if (commandBlock) {
+        const sourceIndex = allBridges.findIndex((item) => item.id === blockId);
+        if (sourceIndex === -1) return;
+
+        const nextNote = createTextBlock("note", bridge.id);
+        const nextBridges = [...allBridges];
+        nextBridges.splice(sourceIndex, 1, commandBlock, nextNote);
+        persistChapterBridges(nextBridges);
+        setFocusedChildNoteTarget({ id: nextNote.id, position: "end" });
+        return;
+      }
+    }
+
+    createChildNoteAfter(blockId);
+  }
+
+  function handleChildSlashCommandSelection(blockId: string, commandId: string) {
+    const allBridges = loadBridges();
+    const currentBlock = allBridges.find((item) => item.id === blockId);
+    if (!bridge || !currentBlock) return;
+
+    const nextKind: HeadingEntryKind | "note" | null =
+      commandId === "p"
+        ? "note"
+        : commandId === "h1"
+        ? "heading1"
+        : commandId === "h2"
+          ? "heading2"
+          : commandId === "h3"
+            ? "heading3"
+            : null;
+
+    if (nextKind) {
+      const nextBridges = allBridges.map((item) =>
+        item.id === blockId
+          ? {
+              ...item,
+              name: nextKind === "note" ? "Untitled note" : bridgeEntryKindLabel(nextKind),
+              entryKind: nextKind,
+              publicNote: undefined,
+              notes: undefined,
+            }
+          : item,
+      );
+
+      persistChapterBridges(nextBridges);
+      setFocusedChildNoteTarget({ id: blockId, position: "end" });
+      return;
+    }
+
+    const commandBlock = createCommandBlock(`/${commandId}`, bridge.id);
+    if (!commandBlock) return;
+
+    const nextNote = createTextBlock("note", bridge.id);
+    const sourceIndex = allBridges.findIndex((item) => item.id === blockId);
+    if (sourceIndex === -1) return;
+
+    const nextBridges = [...allBridges];
+    nextBridges.splice(sourceIndex, 1, commandBlock, nextNote);
+    persistChapterBridges(nextBridges);
+    setFocusedChildNoteTarget({ id: nextNote.id, position: "end" });
+  }
+
+  function removeChildNote(noteId: string) {
+    deleteBridgeRun(noteId);
+    const nextBridges = loadBridges().filter((item) => item.id !== noteId);
+    persistChapterBridges(nextBridges);
+  }
+
+  function mergeChildNoteBackward(noteId: string) {
+    const currentBridges = loadBridges();
+    const currentNote = currentBridges.find((item) => item.id === noteId);
+    if (!bridge || !currentNote || !isTextEntryKind(currentNote.entryKind)) return;
+
+    const chapterItems = currentBridges.filter((item) => item.parentChapterId === bridge.id);
+    const currentIndex = chapterItems.findIndex((item) => item.id === noteId);
+    if (currentIndex === -1) return;
+
+    const previousBlock = currentIndex > 0 ? chapterItems[currentIndex - 1] : null;
+    const currentContent = currentNote.publicNote ?? currentNote.notes ?? "";
+
+    if (!richTextHasContent(currentContent)) {
+      removeChildNote(noteId);
+      if (previousBlock && isTextEntryKind(previousBlock.entryKind)) {
+        setFocusedChildNoteTarget({ id: previousBlock.id, position: "end" });
+      }
+      return;
+    }
+
+    if (!previousBlock || previousBlock.entryKind !== "note") return;
+
+    const previousContent = previousBlock.publicNote ?? previousBlock.notes ?? "";
+    const mergedContent = `${previousContent}${currentContent}`;
+    const nextBridges = currentBridges
+      .map((item) =>
+        item.id === previousBlock.id
+          ? {
+              ...item,
+              publicNote: mergedContent || undefined,
+              notes: undefined,
+            }
+          : item,
+      )
+      .filter((item) => item.id !== noteId);
+
+    persistChapterBridges(nextBridges);
+    deleteBridgeRun(noteId);
+    setFocusedChildNoteTarget({ id: previousBlock.id, position: "end" });
+  }
 
   useEffect(() => {
-    const allBridges = loadBridges();
-    const foundBridge = allBridges.find((item) => item.id === id) ?? null;
-    setBridge(foundBridge);
+    syncBridgeState();
     setClipboard(loadBridgeSessionState().clipboard ?? null);
 
     const runMap = loadBridgeRuns();
@@ -172,8 +650,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   useEffect(() => {
     function onStorage(event: StorageEvent) {
       if (event.key === BRIDGE_STORAGE_KEY) {
-        const allBridges = loadBridges();
-        setBridge(allBridges.find((item) => item.id === id) ?? null);
+        syncBridgeState();
       }
 
       if (event.key === BRIDGE_RUN_STORAGE_KEY) {
@@ -211,6 +688,51 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
       window.removeEventListener("keydown", onEscape);
     };
   }, []);
+
+  useEffect(() => {
+    if (!bridge || bridge.entryKind !== "chapter") return;
+    const targetHref = getChapterDocHref(bridge.id);
+    const currentSearch = typeof window !== "undefined" ? window.location.search : "";
+    const isOnTargetRoute =
+      pathname === "/doc" &&
+      new URLSearchParams(currentSearch).get("type") === "bridge" &&
+      new URLSearchParams(currentSearch).get("id") === bridge.id &&
+      new URLSearchParams(currentSearch).get("block") === "chapter";
+
+    if (!isOnTargetRoute) {
+      router.replace(targetHref);
+    }
+  }, [bridge, pathname, router]);
+
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+
+    function updateContextMenuPosition() {
+      if (!contextMenuRef.current || !contextMenu) return;
+
+      const viewportPadding = 12;
+      const menuRect = contextMenuRef.current.getBoundingClientRect();
+      const left = Math.max(
+        viewportPadding,
+        Math.min(contextMenu.x, window.innerWidth - menuRect.width - viewportPadding),
+      );
+      const top = Math.max(
+        viewportPadding,
+        Math.min(contextMenu.y, window.innerHeight - menuRect.height - viewportPadding),
+      );
+
+      setContextMenuPosition({ left, top });
+    }
+
+    updateContextMenuPosition();
+    window.addEventListener("resize", updateContextMenuPosition);
+    window.addEventListener("scroll", updateContextMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateContextMenuPosition);
+      window.removeEventListener("scroll", updateContextMenuPosition, true);
+    };
+  }, [contextMenu]);
 
   async function runBridge() {
     if (!bridge) return;
@@ -348,7 +870,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     deleteBridge(bridge.id);
     deleteBridgeRun(bridge.id);
     setIsDeleteDialogOpen(false);
-    router.push("/bridge");
+    router.push(parentBridge ? getChapterDocHref(parentBridge.id) : getBridgeDocRootHref());
     router.refresh();
   }
 
@@ -380,8 +902,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
         : item,
     );
 
-    saveBridges(nextBridges);
-    setBridge(nextBridges.find((item) => item.id === bridge.id) ?? bridge);
+    persistChapterBridges(nextBridges);
     clearBridgeClipboard();
     setClipboard(null);
     setContextMenu(null);
@@ -391,6 +912,56 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
         : `${clipboard.items.length} items pasted into ${bridge.name}.`,
     );
     window.setTimeout(() => setPasteMessage(null), 2200);
+  }
+
+  function handleCutBlock(blockId: string) {
+    saveClipboardSelection("cut", getActionTargetBlocks(blockId));
+  }
+
+  function handleCopyBlock(blockId: string) {
+    saveClipboardSelection("copy", getActionTargetBlocks(blockId));
+  }
+
+  function openDeleteBlocksDialog(blockId: string) {
+    const targets = getActionTargetBlocks(blockId);
+    if (!targets.length) return;
+
+    setDeleteChapterBlockIds(targets.map((item) => item.id));
+    setContextMenu(null);
+  }
+
+  function handleDuplicateBlock(block: BridgeItem) {
+    const duplicatedBlock = {
+      ...duplicateBridgeItem(block),
+      parentChapterId: bridge?.entryKind === "chapter" ? bridge.id : block.parentChapterId ?? null,
+    };
+
+    const allBridges = loadBridges();
+    const sourceIndex = allBridges.findIndex((item) => item.id === block.id);
+    if (sourceIndex === -1) return;
+
+    const nextBridges = [...allBridges];
+    nextBridges.splice(sourceIndex + 1, 0, duplicatedBlock);
+    persistChapterBridges(nextBridges);
+    setContextMenu(null);
+  }
+
+  function removeChapterBlocks() {
+    if (!deleteChapterBlockIds.length || isDeletingChapterBlocks) return;
+
+    setIsDeletingChapterBlocks(true);
+
+    for (const blockId of deleteChapterBlockIds) {
+      deleteBridgeRun(blockId);
+    }
+
+    const nextBridges = loadBridges().filter((item) => !deleteChapterBlockIds.includes(item.id));
+    persistChapterBridges(nextBridges);
+    setSelectedChapterBlockIds((current) =>
+      current.filter((item) => !deleteChapterBlockIds.includes(item)),
+    );
+    setDeleteChapterBlockIds([]);
+    setIsDeletingChapterBlocks(false);
   }
 
   if (!ready) {
@@ -414,7 +985,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
           This bridge does not exist in browser storage.
         </p>
         <Link
-          href="/bridge"
+          href={getBridgeDocRootHref()}
           className="mt-4 inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
         >
           Back to bridge
@@ -423,23 +994,43 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     );
   }
 
-  const chapterBlocks =
-    bridge.entryKind === "chapter"
-      ? loadBridges().filter((item) => item.parentChapterId === bridge.id)
-      : [];
+  const backHref = parentBridge ? getChapterDocHref(parentBridge.id) : getBridgeDocRootHref();
+  const backLabel = parentBridge ? parentBridge.name : "Bridge";
+  const contextBlock = getContextBlock();
+  const deleteChapterBlocks = chapterBlocks.filter((item) => deleteChapterBlockIds.includes(item.id));
+
+  function focusPreviousChildNote(noteId: string) {
+    const currentIndex = chapterBlocks.findIndex((item) => item.id === noteId);
+    if (currentIndex <= 0) return;
+
+    const previousBlock = chapterBlocks[currentIndex - 1];
+    if (!previousBlock || !isTextEntryKind(previousBlock.entryKind)) return;
+
+    setFocusedChildNoteTarget({ id: previousBlock.id, position: "end" });
+  }
+
+  function focusNextChildNote(noteId: string) {
+    const currentIndex = chapterBlocks.findIndex((item) => item.id === noteId);
+    if (currentIndex === -1 || currentIndex >= chapterBlocks.length - 1) return;
+
+    const nextBlock = chapterBlocks[currentIndex + 1];
+    if (!nextBlock || !isTextEntryKind(nextBlock.entryKind)) return;
+
+    setFocusedChildNoteTarget({ id: nextBlock.id, position: "start" });
+  }
 
   return (
-    <section className="space-y-7">
+    <section className={isBridgeEntry ? "space-y-7" : "space-y-2.5"}>
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className={isBridgeEntry ? "" : "space-y-0.5"}>
             <Link
-              href="/bridge"
+              href={backHref}
               className="inline-flex items-center gap-2 text-[0.76rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition hover:text-foreground"
             >
               <span aria-hidden="true">&lt;</span>
-              <span>Bridge</span>
+              <span>{backLabel}</span>
             </Link>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
+            <div className={`${isBridgeEntry ? "mt-3" : "mt-0.5"} flex flex-wrap items-center gap-3`}>
               <h1 className="text-[1.5rem] font-semibold tracking-[-0.02em]">
                 {bridge.name}
               </h1>
@@ -467,44 +1058,50 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 text-[0.75rem] text-muted-foreground">
-          <span className="rounded-full border border-border px-2 py-0.5">
-            {bridgeEntryKindLabel(bridge.entryKind)}
-          </span>
-          {isBridgeEntry ? (
+        {isBridgeEntry ? (
+          <div className="flex flex-wrap gap-2 text-[0.75rem] text-muted-foreground">
+            <span className="rounded-full border border-border px-2 py-0.5">
+              {bridgeEntryKindLabel(bridge.entryKind)}
+            </span>
             <span className="rounded-full border border-border px-2 py-0.5">
               {bridgeTypeLabel(bridge.bridgeType)}
             </span>
-          ) : null}
-          {isBridgeEntry ? (
             <span className="rounded-full border border-border px-2 py-0.5">
               {bridge.environment}
             </span>
-          ) : null}
-          {isBridgeEntry && bridge.method ? (
-            <span className="rounded-full border border-border px-2 py-0.5">
-              {bridge.method}
-            </span>
-          ) : null}
-          {isBridgeEntry && bridge.serviceName ? (
-            <span className="rounded-full border border-border px-2 py-0.5">
-              {bridge.serviceName}
-            </span>
-          ) : null}
-        </div>
+            {bridge.method ? (
+              <span className="rounded-full border border-border px-2 py-0.5">
+                {bridge.method}
+              </span>
+            ) : null}
+            {bridge.serviceName ? (
+              <span className="rounded-full border border-border px-2 py-0.5">
+                {bridge.serviceName}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
-        {!isBridgeEntry && richTextHasContent(normalizedPublicNote) ? (
+        {bridge.entryKind === "note" ? (
+          <InlineNoteBlock
+            value={normalizedPublicNote}
+            onChange={updateNoteContent}
+            className="pt-3"
+            maxVisibleCommands={4}
+          />
+        ) : null}
+
+        {bridge.entryKind === "chapter" && richTextHasContent(normalizedPublicNote) ? (
           <div
-            className="pt-2"
+            className="pt-0"
             onContextMenu={(event) => {
               if (bridge.entryKind !== "chapter") return;
               event.preventDefault();
-              setContextMenu({ x: event.clientX, y: event.clientY });
+              setContextMenu({ x: event.clientX, y: event.clientY, targetId: null });
             }}
           >
-            <h2 className="text-[1.1rem] font-semibold tracking-[-0.01em]">Content</h2>
             <div
-              className="mt-2 prose prose-sm max-w-none text-[0.88rem] text-foreground"
+              className="prose prose-sm max-w-none text-[0.88rem] text-foreground"
               dangerouslySetInnerHTML={{ __html: normalizedPublicNote }}
             />
           </div>
@@ -512,10 +1109,10 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
 
         {bridge.entryKind === "chapter" ? (
           <div
-            className="grid gap-3 pt-4"
+            className="grid gap-3 pt-0"
             onContextMenu={(event) => {
               event.preventDefault();
-              setContextMenu({ x: event.clientX, y: event.clientY });
+              setContextMenu({ x: event.clientX, y: event.clientY, targetId: null });
             }}
           >
             {pasteMessage ? (
@@ -539,28 +1136,98 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
 
             {chapterBlocks.length ? (
               <div className="grid gap-3">
-                {chapterBlocks.map((block) => (
-                  <Link
-                    key={block.id}
-                    href={`/bridge/${block.id}`}
-                    className="rounded-xl border border-border bg-background px-4 py-3 transition hover:border-foreground/15"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[0.94rem] font-semibold text-foreground">{block.name}</p>
-                      <span className="rounded-full border border-border px-2 py-0.5 text-[0.67rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        {bridgeEntryKindLabel(block.entryKind)}
-                      </span>
+                {chapterBlocks.map((block) =>
+                  isTextEntryKind(block.entryKind) ? (
+                    <div
+                      key={block.id}
+                      className={`rounded-xl px-1 py-1 ${
+                        selectedChapterBlockIds.includes(block.id) ? "border border-sky-400 ring-2 ring-sky-200" : ""
+                      }`}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSelectedChapterBlockIds((current) =>
+                          current.includes(block.id) ? current : [block.id],
+                        );
+                        setContextMenu({
+                          x: event.clientX,
+                          y: event.clientY,
+                          targetId: block.id,
+                        });
+                      }}
+                      onClickCapture={(event) => {
+                        if (!isModifierSelection(event)) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setContextMenu(null);
+                        toggleChapterBlockSelection(block.id);
+                      }}
+                    >
+                      <InlineNoteBlock
+                        value={normalizeRichTextHtml(block.publicNote ?? block.notes ?? "")}
+                        onChange={(value) => updateChildNoteContent(block.id, value)}
+                        placeholder={textBlockPlaceholder(block.entryKind)}
+                        autoFocus={focusedChildNoteTarget?.id === block.id}
+                        autoFocusPosition={focusedChildNoteTarget?.position ?? "end"}
+                        onAutoFocusComplete={() => setFocusedChildNoteTarget(null)}
+                        onSplit={() => handleChildTextBlockSplit(block.id)}
+                        onBackspaceAtStart={() => mergeChildNoteBackward(block.id)}
+                        onNavigatePrevious={() => focusPreviousChildNote(block.id)}
+                        onNavigateNext={() => focusNextChildNote(block.id)}
+                        editorClassName={headingEditorClassName(block.entryKind)}
+                        commands={block.entryKind === "note" ? BRIDGE_SLASH_COMMANDS : []}
+                        onSelectCommand={(commandId) =>
+                          handleChildSlashCommandSelection(block.id, commandId)
+                        }
+                        maxVisibleCommands={4}
+                      />
                     </div>
-                    <p className="mt-1 text-[0.84rem] text-muted-foreground">
-                      {block.entryKind === "bridge"
-                        ? block.endpoint
-                        : normalizeRichTextHtml(block.publicNote ?? block.notes ?? "")
-                            .replace(/<[^>]+>/g, " ")
-                            .replace(/\s+/g, " ")
-                            .trim() || `${bridgeEntryKindLabel(block.entryKind)} content`}
-                    </p>
-                  </Link>
-                ))}
+                  ) : (
+                    <Link
+                      key={block.id}
+                      href={getBridgeEntryHref(block)}
+                      onClickCapture={(event) => {
+                        if (!isModifierSelection(event)) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setContextMenu(null);
+                        toggleChapterBlockSelection(block.id);
+                      }}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSelectedChapterBlockIds((current) =>
+                          current.includes(block.id) ? current : [block.id],
+                        );
+                        setContextMenu({
+                          x: event.clientX,
+                          y: event.clientY,
+                          targetId: block.id,
+                        });
+                      }}
+                      className={`rounded-xl border bg-background px-4 py-3 transition ${
+                        selectedChapterBlockIds.includes(block.id)
+                          ? "border-sky-400 ring-2 ring-sky-200"
+                          : "border-border hover:border-foreground/15"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[0.94rem] font-semibold text-foreground">{block.name}</p>
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[0.67rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                          {bridgeEntryKindLabel(block.entryKind)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[0.84rem] text-muted-foreground">
+                        {block.entryKind === "bridge"
+                          ? block.endpoint
+                          : normalizeRichTextHtml(block.publicNote ?? block.notes ?? "")
+                              .replace(/<[^>]+>/g, " ")
+                              .replace(/\s+/g, " ")
+                              .trim() || `${bridgeEntryKindLabel(block.entryKind)} content`}
+                      </p>
+                    </Link>
+                  ),
+                )}
               </div>
             ) : (
               <p className="text-[0.84rem] text-muted-foreground">
@@ -800,30 +1467,32 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-2 pt-4">
-          <Link
-            href={`/bridge/${bridge.id}/edit`}
-            className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
-          >
-            Edit bridge
-          </Link>
-          <button
-            type="button"
-            onClick={duplicateBridge}
-            disabled={isDuplicating}
-            className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted disabled:opacity-60"
-          >
-            {isDuplicating ? "Duplicating..." : "Duplicate bridge"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsDeleteDialogOpen(true)}
-            disabled={isDeleting}
-            className="inline-flex rounded-full border border-rose-200 px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
-          >
-            {isDeleting ? "Deleting..." : "Delete bridge"}
-          </button>
-        </div>
+        {isBridgeEntry ? (
+          <div className="flex flex-wrap gap-2 pt-4">
+            <Link
+              href={`/bridge/${bridge.id}/edit`}
+              className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
+            >
+              Edit bridge
+            </Link>
+            <button
+              type="button"
+              onClick={duplicateBridge}
+              disabled={isDuplicating}
+              className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted disabled:opacity-60"
+            >
+              {isDuplicating ? "Duplicating..." : "Duplicate bridge"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDeleteDialogOpen(true)}
+              disabled={isDeleting}
+              className="inline-flex rounded-full border border-rose-200 px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
+            >
+              {isDeleting ? "Deleting..." : "Delete bridge"}
+            </button>
+          </div>
+        ) : null}
 
         {isDeleteDialogOpen && bridge ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 px-4 backdrop-blur-[2px]">
@@ -861,24 +1530,111 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
           </div>
         ) : null}
 
+        {deleteChapterBlocks.length ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 px-4 backdrop-blur-[2px]">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-[0_18px_60px_rgba(15,23,42,0.16)]">
+              <div className="space-y-2">
+                <p className="text-[0.76rem] font-semibold text-muted-foreground">Delete blocks</p>
+                <h2 className="text-[1.2rem] font-semibold tracking-[-0.02em] text-foreground">
+                  {deleteChapterBlocks.length === 1
+                    ? `Remove ${deleteChapterBlocks[0]?.name}?`
+                    : `Remove ${deleteChapterBlocks.length} blocks?`}
+                </h2>
+                <p className="text-[0.9rem] leading-[1.5] text-muted-foreground">
+                  This will remove the selected blocks and their saved run history from this
+                  browser.
+                </p>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteChapterBlockIds([])}
+                  disabled={isDeletingChapterBlocks}
+                  className="inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-foreground transition hover:bg-muted disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={removeChapterBlocks}
+                  disabled={isDeletingChapterBlocks}
+                  className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-rose-600 transition hover:bg-rose-100 disabled:opacity-60"
+                >
+                  {isDeletingChapterBlocks ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {contextMenu && bridge.entryKind === "chapter" ? (
           <div
+            ref={contextMenuRef}
             className="fixed z-50 min-w-[180px] rounded-xl border border-border bg-background p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            style={
+              contextMenuPosition
+                ? { left: contextMenuPosition.left, top: contextMenuPosition.top }
+                : { left: -9999, top: -9999 }
+            }
             onClick={(event) => event.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={pasteIntoChapter}
-              disabled={!clipboard?.items.length}
-              className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {clipboard?.items.length
-                ? clipboard.items.length === 1
-                  ? `Paste ${clipboard.items[0]?.name ?? "block"}`
-                  : `Paste ${clipboard.items.length} blocks`
-                : "Paste"}
-            </button>
+            {contextBlock ? (
+              <div className="grid gap-1">
+                {(() => {
+                  const actionTargets = getActionTargetBlocks(contextBlock.id);
+                  const actionCount = actionTargets.length;
+
+                  return (
+                    <>
+                <button
+                  type="button"
+                  onClick={() => handleCutBlock(contextBlock.id)}
+                  className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted"
+                >
+                  {actionCount > 1 ? `Cut ${actionCount} items` : "Cut"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCopyBlock(contextBlock.id)}
+                  className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted"
+                >
+                  {actionCount > 1 ? `Copy ${actionCount} items` : "Copy"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openDeleteBlocksDialog(contextBlock.id)}
+                  className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-rose-600 transition hover:bg-rose-50"
+                >
+                  {actionCount > 1 ? `Delete ${actionCount} items` : "Delete"}
+                </button>
+                {contextBlock.entryKind === "bridge" || contextBlock.entryKind === "note" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDuplicateBlock(contextBlock)}
+                    className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted"
+                  >
+                    Duplicate
+                  </button>
+                ) : null}
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={pasteIntoChapter}
+                disabled={!clipboard?.items.length}
+                className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {clipboard?.items.length
+                  ? clipboard.items.length === 1
+                    ? `Paste ${clipboard.items[0]?.name ?? "block"}`
+                    : `Paste ${clipboard.items.length} blocks`
+                  : "Paste"}
+              </button>
+            )}
           </div>
         ) : null}
       </section>

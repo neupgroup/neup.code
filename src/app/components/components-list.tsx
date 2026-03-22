@@ -7,6 +7,7 @@ import {
   loadComponents,
   type ComponentItem,
 } from "./component-storage";
+import { PageBlocksEditor } from "../page-blocks-editor";
 
 export function ComponentsList() {
   const [items, setItems] = useState<ComponentItem[]>([]);
@@ -72,6 +73,8 @@ export function ComponentsList() {
           ))}
         </div>
       )}
+
+      <PageBlocksEditor pageKey="components" />
     </section>
   );
 }

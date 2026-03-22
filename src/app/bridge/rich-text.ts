@@ -48,15 +48,17 @@ export function normalizeRichTextHtml(html: string) {
 }
 
 export function richTextHasContent(html: string) {
+  return richTextToPlainText(html).length > 0;
+}
+
+export function richTextToPlainText(html: string) {
   const normalized = normalizeRichTextHtml(html);
-  const plainText = normalized
+  return normalized
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(div|p)>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .trim();
-
-  return plainText.length > 0;
 }
 
 export function richTextToMarkdown(html: string) {

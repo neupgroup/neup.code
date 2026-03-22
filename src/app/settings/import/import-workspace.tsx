@@ -9,6 +9,12 @@ import {
   type BridgeItem,
 } from "../../bridge/bridge-storage";
 import { saveComponents, type ComponentItem } from "../../components/component-storage";
+import {
+  filterWorkspacePageBlocksByResources,
+  parseWorkspacePageBlocks,
+  saveWorkspacePageBlocks,
+  type WorkspacePageBlock,
+} from "../../page-blocks-storage";
 import { readZip } from "../publish/zip";
 
 const ONBOARDING_STORAGE_KEY = "neup.code.onboarding.github-flow.v1";
@@ -21,11 +27,12 @@ type OnboardingState = {
 };
 
 type ExportManifest = {
-  version: 1;
+  version: 1 | 2;
   generatedAt: string;
   onboarding: OnboardingState;
   bridges: BridgeItem[];
   components: ComponentItem[];
+  workspacePageBlocks: WorkspacePageBlock[];
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -34,10 +41,31 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isValidManifest(value: unknown): value is ExportManifest {
   if (!isObject(value)) return false;
-  if (value.version !== 1) return false;
+  if (value.version !== 1 && value.version !== 2) return false;
   if (!Array.isArray(value.bridges)) return false;
   if (!Array.isArray(value.components)) return false;
   return true;
+}
+
+function parseOnboardingState(value: unknown): OnboardingState {
+  if (!isObject(value)) return {};
+
+  return {
+    repo: typeof value.repo === "string" ? value.repo : undefined,
+    target:
+      value.target === "repository" || value.target === "profile" ? value.target : undefined,
+    isAuthorized: typeof value.isAuthorized === "boolean" ? value.isAuthorized : undefined,
+    started: typeof value.started === "boolean" ? value.started : undefined,
+  };
+}
+
+function hasLegacyDocBridgeData(bridges: BridgeItem[]) {
+  return bridges.some((bridge) => {
+    const entryKind = bridge.entryKind ?? "bridge";
+    const hasChapterLinks = Boolean(bridge.parentChapterId) || Boolean(bridge.chapterBlockIds?.length);
+
+    return entryKind !== "bridge" || hasChapterLinks;
+  });
 }
 
 export function ImportWorkspace() {
@@ -67,9 +95,26 @@ export function ImportWorkspace() {
         throw new Error("This export does not include a manifest. Re-export using the latest version of Neup.Code.");
       }
 
-      const parsed = JSON.parse(manifestEntry.content) as unknown;
-      if (!isValidManifest(parsed)) {
+      const parsedManifest = JSON.parse(manifestEntry.content) as unknown;
+      if (!isValidManifest(parsedManifest)) {
         throw new Error("The manifest inside this zip is invalid.");
+      }
+
+      const parsed: ExportManifest = {
+        ...parsedManifest,
+        onboarding: parseOnboardingState(parsedManifest.onboarding),
+        workspacePageBlocks: parseWorkspacePageBlocks(parsedManifest.workspacePageBlocks),
+      };
+      const sanitizedWorkspacePageBlocks = filterWorkspacePageBlocksByResources(
+        parsed.workspacePageBlocks,
+        parsed.bridges.map((bridge) => bridge.id),
+        parsed.components.map((component) => component.id),
+      );
+
+      if (!sanitizedWorkspacePageBlocks.length && hasLegacyDocBridgeData(parsed.bridges)) {
+        throw new Error(
+          "This export uses the previous document format and cannot be edited in the current /doc workspace. Re-export it from the latest version of Neup.Code before importing.",
+        );
       }
 
       window.localStorage.setItem(
@@ -78,11 +123,12 @@ export function ImportWorkspace() {
       );
       saveBridges(parsed.bridges);
       saveComponents(parsed.components);
+      saveWorkspacePageBlocks(sanitizedWorkspacePageBlocks);
       saveBridgeRuns({});
       window.localStorage.removeItem(BRIDGE_RUN_STORAGE_KEY);
 
       setMessage(
-        `Imported ${parsed.components.length} component${parsed.components.length === 1 ? "" : "s"} and ${parsed.bridges.length} bridge${parsed.bridges.length === 1 ? "" : "s"} into this browser.`,
+        `Imported workspace docs (${sanitizedWorkspacePageBlocks.length} block${sanitizedWorkspacePageBlocks.length === 1 ? "" : "s"}), ${parsed.components.length} component${parsed.components.length === 1 ? "" : "s"}, and ${parsed.bridges.length} bridge${parsed.bridges.length === 1 ? "" : "s"} into this browser.`,
       );
     } catch (importError) {
       setError(
@@ -112,8 +158,8 @@ export function ImportWorkspace() {
             Import
           </h1>
           <p className="max-w-2xl text-[0.9rem] leading-[1.5] text-muted-foreground">
-            Upload a Neup.Code export zip and restore its components, bridges, and onboarding data
-            into this browser.
+            Upload a Neup.Code export zip and restore workspace docs, components, bridges, and
+            onboarding data into this browser.
           </p>
         </div>
       </div>
@@ -135,8 +181,9 @@ export function ImportWorkspace() {
         ) : null}
 
         <p className="max-w-2xl text-[0.84rem] text-muted-foreground">
-          Import replaces the saved onboarding state, components, and bridges in this browser. Run
-          history is cleared during import because responses are not part of the export package.
+          Import replaces the saved onboarding state, workspace docs, components, and bridges in
+          this browser. Run history is cleared during import because responses are not part of the
+          export package.
         </p>
 
         {message ? <p className="text-[0.84rem] text-emerald-700">{message}</p> : null}

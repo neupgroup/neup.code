@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BRIDGE_STORAGE_KEY, loadBridges, type BridgeItem } from "../../bridge-storage";
 import { NewBridgeForm } from "../../new/new-bridge-form";
+import { getBridgeDocRootHref } from "../../paths";
 
 type EditBridgePageProps = {
   id: string;
@@ -51,7 +52,7 @@ export function EditBridgePage({ id }: EditBridgePageProps) {
           We could not find this bridge in browser storage.
         </p>
         <Link
-          href="/bridge"
+          href={getBridgeDocRootHref()}
           className="mt-4 inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
         >
           Back to bridge

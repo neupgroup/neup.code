@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ComponentsList } from "./components-list";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Components",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function ComponentsPage() {
-  return <ComponentsList />;
+  redirect("/doc?type=component");
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { BridgeList } from "./bridge-list";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Bridge",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function BridgePage() {
-  return <BridgeList />;
+  redirect("/doc?type=bridge");
 }

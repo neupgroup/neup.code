@@ -1,3 +1,5 @@
+import { cleanupOrphanedWorkspaceComponentBlocks } from "../page-blocks-storage";
+
 export type ComponentPart = {
   id: string;
   label: string;
@@ -75,4 +77,5 @@ export function loadComponents(): ComponentItem[] {
 export function saveComponents(items: ComponentItem[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(COMPONENT_STORAGE_KEY, JSON.stringify(items));
+  cleanupOrphanedWorkspaceComponentBlocks(items.map((item) => item.id));
 }

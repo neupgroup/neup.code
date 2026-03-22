@@ -16,6 +16,7 @@ import {
   type BridgeItem,
   type BridgeType,
 } from "../bridge-storage";
+import { getBridgeDocRootHref, getBridgeEntryHref, getChapterDocHref } from "../paths";
 
 function createId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -463,10 +464,12 @@ export function NewBridgeForm({
 
     router.push(
       mode === "edit"
-        ? `/bridge/${item.id}`
+        ? item.entryKind === "chapter"
+          ? getChapterDocHref(item.id)
+          : `/bridge/${item.id}`
         : targetChapter
-          ? `/bridge/${targetChapter.id}`
-          : "/bridge",
+          ? getChapterDocHref(targetChapter.id)
+          : getBridgeDocRootHref(),
     );
     router.refresh();
   }
@@ -493,8 +496,8 @@ export function NewBridgeForm({
         : form.entryKind === "chapter"
           ? "Save chapter"
           : "Save note";
-  const cancelHref = isEditMode && bridge ? `/bridge/${bridge.id}` : targetChapter ? `/bridge/${targetChapter.id}` : "/bridge";
-  const backHref = isEditMode && bridge ? `/bridge/${bridge.id}` : targetChapter ? `/bridge/${targetChapter.id}` : "/bridge";
+  const cancelHref = isEditMode && bridge ? getBridgeEntryHref(bridge) : targetChapter ? getChapterDocHref(targetChapter.id) : getBridgeDocRootHref();
+  const backHref = isEditMode && bridge ? getBridgeEntryHref(bridge) : targetChapter ? getChapterDocHref(targetChapter.id) : getBridgeDocRootHref();
   const backLabel = isEditMode ? bridge?.name ?? "Bridge" : targetChapter?.name ?? "Bridge";
   const entryKindOptions = [
     { label: "Bridge", value: "bridge" },

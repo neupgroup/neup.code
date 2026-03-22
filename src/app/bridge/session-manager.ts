@@ -21,7 +21,14 @@ type BridgeSessionState = {
 };
 
 function isBridgeEntryKind(value: unknown): value is BridgeEntryKind {
-  return value === "bridge" || value === "chapter" || value === "note";
+  return (
+    value === "bridge" ||
+    value === "chapter" ||
+    value === "note" ||
+    value === "heading1" ||
+    value === "heading2" ||
+    value === "heading3"
+  );
 }
 
 function normalizeClipboardEntry(value: unknown): BridgeSessionClipboardEntry | null {

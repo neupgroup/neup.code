@@ -1,12 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { loadBridges, type BridgeItem } from "../../bridge/bridge-storage";
-import { richTextHasContent, richTextToMarkdown } from "../../bridge/rich-text";
+import {
+  richTextHasContent,
+  richTextToMarkdown,
+  richTextToPlainText,
+} from "../../bridge/rich-text";
 import { loadComponents, type ComponentItem } from "../../components/component-storage";
+import {
+  loadWorkspacePageBlocks,
+  type WorkspacePageBlock,
+  type WorkspacePageKey,
+} from "../../page-blocks-storage";
 import { buildZip } from "./zip";
 
 const ONBOARDING_STORAGE_KEY = "neup.code.onboarding.github-flow.v1";
+const DOC_PAGE_KEYS: WorkspacePageKey[] = ["bridge", "design", "components"];
 
 type OnboardingState = {
   repo?: string;
@@ -16,11 +25,19 @@ type OnboardingState = {
 };
 
 type ExportManifest = {
-  version: 1;
+  version: 2;
   generatedAt: string;
   onboarding: OnboardingState;
   bridges: BridgeItem[];
   components: ComponentItem[];
+  workspacePageBlocks: WorkspacePageBlock[];
+};
+
+type ExportSnapshot = {
+  onboarding: OnboardingState;
+  bridges: BridgeItem[];
+  components: ComponentItem[];
+  workspacePageBlocks: WorkspacePageBlock[];
 };
 
 function formatKeyValueList(items: BridgeItem["requiredFields"]) {
@@ -100,8 +117,18 @@ function formatFileName(title: string, fallback: string) {
   return normalized || fallback;
 }
 
+function loadOnboardingState() {
+  try {
+    const rawOnboarding = window.localStorage.getItem(ONBOARDING_STORAGE_KEY);
+    if (!rawOnboarding) return {};
+    return JSON.parse(rawOnboarding) as OnboardingState;
+  } catch {
+    return {};
+  }
+}
+
 function buildComponentMarkdown(component: ComponentItem) {
-  const sections: string[] = [component.name, ""];
+  const sections: string[] = [`# ${component.name}`, ""];
 
   if (component.description?.trim()) {
     sections.push(component.description.trim(), "");
@@ -127,7 +154,7 @@ function buildComponentMarkdown(component: ComponentItem) {
 
 function buildBridgeMarkdown(bridge: BridgeItem) {
   const sections: string[] = [
-    bridge.name,
+    `# ${bridge.name}`,
     "",
     `Type: ${bridge.bridgeType}`,
     `Endpoint: ${bridge.endpoint}`,
@@ -168,6 +195,7 @@ function buildBridgeMarkdown(bridge: BridgeItem) {
 function buildIndexMarkdown(
   componentFiles: Array<{ fileName: string }>,
   bridgeFiles: Array<{ fileName: string }>,
+  pageFiles: Array<{ fileName: string }>,
 ) {
   const lines = ["components:"];
 
@@ -185,41 +213,111 @@ function buildIndexMarkdown(
     lines.push("-> none");
   }
 
+  lines.push("", "pages:");
+
+  if (pageFiles.length) {
+    lines.push(...pageFiles.map((file) => `-> ${file.fileName}`));
+  } else {
+    lines.push("-> none");
+  }
+
   return lines.join("\n");
 }
 
-export function PublishExport() {
-  const [ready, setReady] = useState(false);
-  const [onboarding, setOnboarding] = useState<OnboardingState>({});
-  const [bridges, setBridges] = useState<BridgeItem[]>([]);
-  const [components, setComponents] = useState<ComponentItem[]>([]);
+function getPageTitle(pageKey: WorkspacePageKey) {
+  if (pageKey === "bridge") return "Bridge";
+  if (pageKey === "design") return "Design";
+  return "Components";
+}
 
-  useEffect(() => {
-    try {
-      const rawOnboarding = window.localStorage.getItem(ONBOARDING_STORAGE_KEY);
-      if (rawOnboarding) {
-        const parsed = JSON.parse(rawOnboarding) as OnboardingState;
-        setOnboarding(parsed);
-      }
-    } catch {
-      setOnboarding({});
+function getLinkedBlockLabel(
+  block: WorkspacePageBlock,
+  bridges: BridgeItem[],
+  components: ComponentItem[],
+) {
+  if (block.kind === "component") {
+    const component = components.find((item) => item.id === block.content);
+    if (component) {
+      return `> Component block: ${component.name}`;
     }
 
-    setBridges(loadBridges());
-    setComponents(loadComponents());
-    setReady(true);
-  }, []);
+    return block.content
+      ? `> Component block: Missing component (${block.content})`
+      : "> Component block: Unlinked";
+  }
 
-  const zipEntries = useMemo(() => {
+  if (block.kind === "chapter" || block.kind === "api" || block.kind === "webhook" || block.kind === "grpc") {
+    const bridge = bridges.find((item) => item.id === block.content);
+    const blockLabel =
+      block.kind === "chapter"
+        ? "Chapter"
+        : block.kind === "api"
+          ? "API"
+          : block.kind === "webhook"
+            ? "Webhook"
+            : "gRPC";
+
+    if (bridge) {
+      return `> ${blockLabel} block: ${bridge.name}`;
+    }
+
+    return block.content
+      ? `> ${blockLabel} block: Missing bridge (${block.content})`
+      : `> ${blockLabel} block: Unlinked`;
+  }
+
+  return "";
+}
+
+function buildPageMarkdown(
+  pageKey: WorkspacePageKey,
+  blocks: WorkspacePageBlock[],
+  bridges: BridgeItem[],
+  components: ComponentItem[],
+) {
+  const sections: string[] = [`# ${getPageTitle(pageKey)}`, ""];
+  const pageBlocks = blocks.filter((block) => block.pageKey === pageKey);
+
+  pageBlocks.forEach((block) => {
+    if (block.kind === "note") {
+      const content = richTextToMarkdown(block.content);
+      if (content) {
+        sections.push(content, "");
+      }
+      return;
+    }
+
+    if (block.kind === "heading1" || block.kind === "heading2" || block.kind === "heading3") {
+      const content = richTextToPlainText(block.content) || "Untitled heading";
+      const marker = block.kind === "heading1" ? "#" : block.kind === "heading2" ? "##" : "###";
+      sections.push(`${marker} ${content}`, "");
+      return;
+    }
+
+    const linkedBlock = getLinkedBlockLabel(block, bridges, components);
+    if (linkedBlock) {
+      sections.push(linkedBlock, "");
+    }
+  });
+
+  if (sections.length === 2) {
+    sections.push("No doc blocks saved.");
+  }
+
+  return sections.join("\n").trimEnd();
+}
+
+function buildZipEntries(snapshot: ExportSnapshot) {
     const manifest: ExportManifest = {
-      version: 1,
+      version: 2,
       generatedAt: new Date().toISOString(),
-      onboarding,
-      bridges,
-      components,
+      onboarding: snapshot.onboarding,
+      bridges: snapshot.bridges,
+      components: snapshot.components,
+      workspacePageBlocks: snapshot.workspacePageBlocks,
     };
 
-    const componentFiles = components.map((component, index) => {
+    const componentFiles = snapshot.components.map((component, index) => {
       const baseName = formatFileName(component.name, `component_${index + 1}`);
       return {
         fileName: `${baseName}.md`,
@@ -228,7 +326,7 @@ export function PublishExport() {
       };
     });
 
-    const bridgeFiles = bridges.map((bridge, index) => {
+    const bridgeFiles = snapshot.bridges.map((bridge, index) => {
       const baseName = formatFileName(bridge.name, `bridge_${index + 1}`);
       return {
         fileName: `${baseName}.md`,
@@ -237,17 +335,41 @@ export function PublishExport() {
       };
     });
 
-    const indexContent = buildIndexMarkdown(componentFiles, bridgeFiles);
+    const pageFiles = DOC_PAGE_KEYS.map((pageKey) => ({
+      fileName: `${pageKey}.md`,
+      zipPath: `.docs/pages/${pageKey}.md`,
+      content: buildPageMarkdown(
+        pageKey,
+        snapshot.workspacePageBlocks,
+        snapshot.bridges,
+        snapshot.components,
+      ),
+    }));
 
-    return [
-      ...componentFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
-      ...bridgeFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
-      { name: ".docs/index.md", content: indexContent },
-      { name: ".docs/manifest.json", content: JSON.stringify(manifest, null, 2) },
-    ];
-  }, [bridges, components, onboarding]);
+    const indexContent = buildIndexMarkdown(componentFiles, bridgeFiles, pageFiles);
+
+  return [
+    ...componentFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
+    ...bridgeFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
+    ...pageFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
+    { name: ".docs/index.md", content: indexContent },
+    { name: ".docs/manifest.json", content: JSON.stringify(manifest, null, 2) },
+  ];
+}
+
+export function PublishExport() {
+  function loadExportSnapshot(): ExportSnapshot {
+    return {
+      onboarding: loadOnboardingState(),
+      bridges: loadBridges(),
+      components: loadComponents(),
+      workspacePageBlocks: loadWorkspacePageBlocks(),
+    };
+  }
 
   function downloadMarkdown() {
+    const snapshot = loadExportSnapshot();
+    const zipEntries = buildZipEntries(snapshot);
     const zipBytes = buildZip(zipEntries);
     const blob = new Blob([zipBytes], { type: "application/zip" });
     const url = URL.createObjectURL(blob);
@@ -267,8 +389,8 @@ export function PublishExport() {
             Export everything as Markdown
           </h1>
           <p className="max-w-2xl text-[0.9rem] leading-[1.5] text-muted-foreground">
-            Generate a Markdown export from the data saved in this browser, including onboarding
-            state, bridge configuration, and notes.
+            Generate a Markdown export from the latest data saved in this browser, including
+            onboarding state, workspace docs, bridge configuration, and notes.
           </p>
         </div>
       </div>
@@ -277,7 +399,6 @@ export function PublishExport() {
         <button
           type="button"
           onClick={downloadMarkdown}
-          disabled={!ready}
           className="inline-flex rounded-full bg-primary px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
         >
           Export Markdown

@@ -3,7 +3,7 @@ import { ImportWorkspace } from "./import-workspace";
 
 export const metadata: Metadata = {
   title: "Import",
-  description: "Import saved app data into this browser.",
+  description: "Import saved workspace data and docs into this browser.",
 };
 
 export default function ImportPage() {

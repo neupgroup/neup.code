@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type SidebarIconName =
   | "bridge"
@@ -29,14 +30,14 @@ const sidebarGroups: SidebarGroup[] = [
     links: [
       { href: "/", label: "Home", icon: "home" },
       { href: "/onboarding", label: "Onboarding", icon: "onboarding" },
-      { href: "/components", label: "Components", icon: "components" },
-      { href: "/design", label: "Design", icon: "design" },
+      { href: "/doc?type=component", label: "Components", icon: "components" },
+      { href: "/doc?type=design", label: "Design", icon: "design" },
       { href: "/rules", label: "Rules", icon: "rules" },
     ],
   },
   {
     title: "Bridge",
-    links: [{ href: "/bridge", label: "Bridge", icon: "bridge" }],
+    links: [{ href: "/doc?type=bridge", label: "Bridge", icon: "bridge" }],
   },
   {
     title: "Settings",
@@ -44,12 +45,39 @@ const sidebarGroups: SidebarGroup[] = [
   },
 ];
 
-function isActivePath(currentPathname: string, href: string) {
+function isActivePath(currentPathname: string, currentType: string | null, href: string) {
   if (href === "/") {
     return currentPathname === "/";
   }
 
-  return currentPathname === href || currentPathname.startsWith(`${href}/`);
+  if (href === "/doc?type=bridge") {
+    return (
+      (currentPathname === "/doc" && currentType === "bridge") ||
+      currentPathname === "/bridge" ||
+      currentPathname.startsWith("/bridge/")
+    );
+  }
+
+  if (href === "/doc?type=component") {
+    return (
+      (currentPathname === "/doc" && currentType === "component") ||
+      currentPathname === "/component" ||
+      currentPathname.startsWith("/component/") ||
+      currentPathname === "/components" ||
+      currentPathname.startsWith("/components/")
+    );
+  }
+
+  if (href === "/doc?type=design") {
+    return (
+      (currentPathname === "/doc" && currentType === "design") ||
+      currentPathname === "/design" ||
+      currentPathname.startsWith("/design/")
+    );
+  }
+
+  const [targetPath] = href.split("?");
+  return currentPathname === targetPath || currentPathname.startsWith(`${targetPath}/`);
 }
 
 function SidebarIcon({ name }: { name: SidebarIconName }) {
@@ -117,6 +145,13 @@ function SidebarIcon({ name }: { name: SidebarIconName }) {
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const [docType, setDocType] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const nextType = new URLSearchParams(window.location.search).get("type");
+    setDocType(nextType);
+  }, [pathname]);
 
   return (
     <nav className="space-y-7">
@@ -127,7 +162,7 @@ export function SidebarNav() {
           </p>
           <div className="space-y-1">
             {group.links.map((item) => {
-              const isActive = isActivePath(pathname, item.href);
+              const isActive = isActivePath(pathname, docType, item.href);
 
               return (
                 <Link
