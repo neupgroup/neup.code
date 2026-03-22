@@ -376,16 +376,28 @@ export function SidebarNav() {
             <button 
               type="button" 
               onClick={() => {
-                if (!isExpanded) setExpandedWorkspaceId(ws.id);
+                setExpandedWorkspaceId(isExpanded ? null : ws.id);
               }}
-              className="group flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left transition hover:bg-muted"
+              className="group flex h-10 w-full items-center rounded-xl px-3 text-left transition hover:bg-muted"
             >
-              <div className="flex h-5 w-5 items-center justify-center shrink-0 text-muted-foreground group-hover:text-foreground">
-                <SidebarIcon name="workspace" />
+              <div className="flex min-w-0 items-center gap-2">
+                <p
+                  className="truncate text-[0.93rem] font-semibold tracking-[0] text-foreground/75 transition-colors group-hover:text-foreground"
+                  title={ws.name}
+                >
+                  {ws.name}
+                </p>
+                <span
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center text-foreground/50 opacity-0 transition-all group-hover:opacity-100 group-focus-visible:opacity-100 ${
+                    isExpanded ? "rotate-90" : "rotate-0"
+                  }`}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </span>
               </div>
-              <p className="text-[0.93rem] font-semibold tracking-[0] text-foreground/75 group-hover:text-foreground transition-colors truncate" title={ws.name}>
-                {ws.name}
-              </p>
             </button>
             
             <div 
