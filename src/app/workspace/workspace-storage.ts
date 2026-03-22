@@ -4,6 +4,8 @@ export type WorkspaceItem = {
   description: string;
   createdAt: string;
   sharedWith: string[];
+  isHidden?: boolean;
+  isDefault?: boolean;
 };
 
 export const WORKSPACE_STORAGE_KEY = "neup.code.workspace.profiles.v1";

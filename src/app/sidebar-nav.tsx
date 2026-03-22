@@ -12,7 +12,7 @@ import {
   type BridgeItem,
 } from "./bridge/bridge-storage";
 import { getPageDocHref } from "./bridge/paths";
-import { loadWorkspaces, WORKSPACE_STORAGE_EVENT } from "./workspace/workspace-storage";
+import { loadWorkspaces, WORKSPACE_STORAGE_EVENT, type WorkspaceItem } from "./workspace/workspace-storage";
 
 type SidebarIconName =
   | "bridge"
@@ -150,7 +150,8 @@ export function SidebarNav() {
   const searchParams = useSearchParams();
   const docId = searchParams.get("id");
   const [notePages, setNotePages] = useState<BridgeItem[]>([]);
-  const [workspaceName, setWorkspaceName] = useState("Workspace");
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [expandedWorkspaceId, setExpandedWorkspaceId] = useState<string | null | undefined>(undefined);
   const [accessedFrom, setAccessedFrom] = useState<string[] | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -167,8 +168,8 @@ export function SidebarNav() {
     } catch {}
   }, []);
 
-  function handlePageClick(page: BridgeItem, href: string) {
-    const data = [workspaceName, page.name?.trim() || "Untitled page", href];
+  function handlePageClick(page: BridgeItem, href: string, currentWorkspaceName: string) {
+    const data = [currentWorkspaceName, page.name?.trim() || "Untitled page", href];
     setAccessedFrom(data);
     try {
       window.sessionStorage.setItem("accessed_from", JSON.stringify(data));
@@ -213,9 +214,12 @@ export function SidebarNav() {
   useEffect(() => {
     function syncWorkspace() {
       const items = loadWorkspaces();
-      if (items.length > 0) {
-        setWorkspaceName(items[0].name);
-      }
+      setWorkspaces(items);
+      setExpandedWorkspaceId((prev) => {
+        if (prev !== undefined) return prev;
+        const def = items.find(w => w.isDefault);
+        return def ? def.id : null;
+      });
     }
     syncWorkspace();
     window.addEventListener(WORKSPACE_STORAGE_EVENT, syncWorkspace);
@@ -274,7 +278,7 @@ export function SidebarNav() {
     };
   }, []);
 
-  function handleAddPage() {
+  function handleAddPage(currentWorkspaceName: string, workspaceId: string) {
     const nextPage: BridgeItem = {
       id:
         typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -286,10 +290,11 @@ export function SidebarNav() {
       endpoint: "",
       environment: "development",
       createdAt: new Date().toISOString(),
+      workspaceId,
     };
     const nextBridges = [...loadBridges(), nextPage];
     saveBridges(nextBridges);
-    handlePageClick(nextPage, getPageDocHref(nextPage.id));
+    handlePageClick(nextPage, getPageDocHref(nextPage.id), currentWorkspaceName);
     router.push(getPageDocHref(nextPage.id));
   }
 
@@ -324,70 +329,101 @@ export function SidebarNav() {
         </div>
       ))}
 
-      <div className="space-y-2">
-        <p className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground truncate" title={workspaceName}>
-          {workspaceName}
-        </p>
-        <div className="space-y-1">
-          {notePages.map((page) => {
-            const href = getPageDocHref(page.id);
-            const isExplicitlyActive = (pathname === "/doc" && docId === page.id);
-            const isDocContext = pathname === "/doc" || pathname.startsWith("/bridge");
-            const isAccessedRoot = isDocContext && accessedFrom?.[2] === href;
-            const isActive = isExplicitlyActive || isAccessedRoot;
+      {workspaces
+        .filter(ws => !ws.isHidden)
+        .sort((a, b) => {
+          if (a.isDefault && !b.isDefault) return -1;
+          if (!a.isDefault && b.isDefault) return 1;
+          return a.name.localeCompare(b.name);
+        })
+        .map((ws) => {
+        const isExpanded = expandedWorkspaceId === ws.id;
 
-            return (
-              <div key={page.id} className="group relative flex items-center">
-                <Link
-                  href={href}
-                  onClick={() => handlePageClick(page, href)}
-                  aria-current={isActive ? "page" : undefined}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
-                      page,
-                    });
-                  }}
-                  className={`flex h-10 flex-1 items-center gap-2 rounded-xl px-3 text-[0.93rem] font-semibold tracking-[0] transition ${
-                    isActive
-                      ? "bg-muted text-foreground"
-                      : "text-foreground/75 hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  <SidebarIcon name="page" />
-                  <span className="truncate pr-6">{page.name?.trim() || "Untitled page"}</span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
-                      page,
-                    });
-                  }}
-                  className="absolute right-2 opacity-0 group-[&:hover]:opacity-100 flex h-7 w-7 items-center justify-center rounded-lg hover:bg-background text-foreground/50 hover:text-foreground transition-all"
-                  aria-label="More options"
-                >
-                  <SidebarIcon name="more-vertical" />
-                </button>
+        return (
+          <div key={ws.id} className="flex flex-col gap-1">
+            <button 
+              type="button" 
+              onClick={() => {
+                if (!isExpanded) setExpandedWorkspaceId(ws.id);
+              }}
+              className="w-full text-left block py-1"
+            >
+              <p className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground transition-colors truncate" title={ws.name}>
+                {ws.name}
+              </p>
+            </button>
+            
+            <div 
+              className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+              style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
+            >
+              <div className="overflow-hidden min-h-0">
+                <div className="space-y-1 pt-1 pb-1">
+                  {notePages.filter(p => p.workspaceId === ws.id || (!p.workspaceId && ws.isDefault)).map((page) => {
+                    const href = getPageDocHref(page.id);
+                    const isExplicitlyActive = (pathname === "/doc" && docId === page.id);
+                    const isDocContext = pathname === "/doc" || pathname.startsWith("/bridge");
+                    const isAccessedRoot = isDocContext && accessedFrom?.[2] === href;
+                    const isActive = isExplicitlyActive || isAccessedRoot;
+
+                    const isContextMenuOpen = contextMenu?.page.id === page.id;
+                    const forceHoverState = isActive || isContextMenuOpen;
+
+                    return (
+                      <div key={page.id} className={`group relative flex items-center rounded-xl transition ${forceHoverState ? "bg-muted text-foreground" : "text-foreground/75 hover:bg-muted hover:text-foreground"}`}>
+                        <Link
+                          href={href}
+                          onClick={() => handlePageClick(page, href, ws.name)}
+                          aria-current={isActive ? "page" : undefined}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setContextMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              page,
+                            });
+                          }}
+                          className="flex h-10 flex-1 items-center gap-2 px-3 text-[0.93rem] font-semibold tracking-[0]"
+                        >
+                          <SidebarIcon name="page" />
+                          <span className="truncate pr-6">{page.name?.trim() || "Untitled page"}</span>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (e.nativeEvent && e.nativeEvent.stopImmediatePropagation) {
+                              e.nativeEvent.stopImmediatePropagation();
+                            }
+                            setContextMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              page,
+                            });
+                          }}
+                          className={`absolute right-2 ${isContextMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"} flex h-7 w-7 items-center justify-center rounded-lg hover:bg-background/80 text-foreground/50 hover:text-foreground transition-all`}
+                          aria-label="More options"
+                        >
+                          <SidebarIcon name="more-vertical" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => handleAddPage(ws.name, ws.id)}
+                    className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-[0.93rem] font-semibold tracking-[0] text-foreground/75 transition hover:bg-muted hover:text-foreground"
+                  >
+                    <SidebarIcon name="plus" />
+                    Add a page
+                  </button>
+                </div>
               </div>
-            );
-          })}
-          <button
-            type="button"
-            onClick={handleAddPage}
-            className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-[0.93rem] font-semibold tracking-[0] text-foreground/75 transition hover:bg-muted hover:text-foreground"
-          >
-            <SidebarIcon name="plus" />
-            Add a page
-          </button>
-        </div>
-      </div>
+            </div>
+          </div>
+        );
+      })}
 
       {contextMenu && (
         <div

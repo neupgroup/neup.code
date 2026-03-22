@@ -42,6 +42,7 @@ export type BridgeItem = {
   publicNote?: string;
   notes?: string;
   createdAt: string;
+  workspaceId?: string;
 };
 
 export const BRIDGE_STORAGE_KEY = "neup.code.bridge.items.v1";
