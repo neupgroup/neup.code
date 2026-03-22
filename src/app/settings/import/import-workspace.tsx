@@ -8,7 +8,6 @@ import {
   saveBridges,
   type BridgeItem,
 } from "../../bridge/bridge-storage";
-import { saveComponents, type ComponentItem } from "../../components/component-storage";
 import {
   filterWorkspacePageBlocksByResources,
   parseWorkspacePageBlocks,
@@ -31,7 +30,6 @@ type ExportManifest = {
   generatedAt: string;
   onboarding: OnboardingState;
   bridges: BridgeItem[];
-  components: ComponentItem[];
   workspacePageBlocks: WorkspacePageBlock[];
 };
 
@@ -43,7 +41,6 @@ function isValidManifest(value: unknown): value is ExportManifest {
   if (!isObject(value)) return false;
   if (value.version !== 1 && value.version !== 2) return false;
   if (!Array.isArray(value.bridges)) return false;
-  if (!Array.isArray(value.components)) return false;
   return true;
 }
 
@@ -108,7 +105,6 @@ export function ImportWorkspace() {
       const sanitizedWorkspacePageBlocks = filterWorkspacePageBlocksByResources(
         parsed.workspacePageBlocks,
         parsed.bridges.map((bridge) => bridge.id),
-        parsed.components.map((component) => component.id),
       );
 
       if (!sanitizedWorkspacePageBlocks.length && hasLegacyDocBridgeData(parsed.bridges)) {
@@ -122,13 +118,12 @@ export function ImportWorkspace() {
         JSON.stringify(parsed.onboarding ?? {}),
       );
       saveBridges(parsed.bridges);
-      saveComponents(parsed.components);
       saveWorkspacePageBlocks(sanitizedWorkspacePageBlocks);
       saveBridgeRuns({});
       window.localStorage.removeItem(BRIDGE_RUN_STORAGE_KEY);
 
       setMessage(
-        `Imported workspace docs (${sanitizedWorkspacePageBlocks.length} block${sanitizedWorkspacePageBlocks.length === 1 ? "" : "s"}), ${parsed.components.length} component${parsed.components.length === 1 ? "" : "s"}, and ${parsed.bridges.length} bridge${parsed.bridges.length === 1 ? "" : "s"} into this browser.`,
+        `Imported workspace docs (${sanitizedWorkspacePageBlocks.length} block${sanitizedWorkspacePageBlocks.length === 1 ? "" : "s"}) and ${parsed.bridges.length} bridge${parsed.bridges.length === 1 ? "" : "s"} into this browser.`,
       );
     } catch (importError) {
       setError(
@@ -158,7 +153,7 @@ export function ImportWorkspace() {
             Import
           </h1>
           <p className="max-w-2xl text-[0.9rem] leading-[1.5] text-muted-foreground">
-            Upload a Neup.Code export zip and restore workspace docs, components, bridges, and
+            Upload a Neup.Code export zip and restore workspace docs, bridges, and
             onboarding data into this browser.
           </p>
         </div>
@@ -181,7 +176,7 @@ export function ImportWorkspace() {
         ) : null}
 
         <p className="max-w-2xl text-[0.84rem] text-muted-foreground">
-          Import replaces the saved onboarding state, workspace docs, components, and bridges in
+          Import replaces the saved onboarding state, workspace docs, and bridges in
           this browser. Run history is cleared during import because responses are not part of the
           export package.
         </p>

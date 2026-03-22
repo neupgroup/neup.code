@@ -45,7 +45,16 @@ export type BridgeItem = {
 };
 
 export const BRIDGE_STORAGE_KEY = "neup.code.bridge.items.v1";
+export const BRIDGE_STORAGE_EVENT = "neup.code.bridge.items.updated";
 export const BRIDGE_RUN_STORAGE_KEY = "neup.code.bridge.runs.v1";
+const SERVER_BRIDGES_SNAPSHOT: BridgeItem[] = [];
+
+let bridgesSnapshotCache:
+  | {
+      raw: string | null;
+      items: BridgeItem[];
+    }
+  | null = null;
 
 export type BridgeRunRecord = {
   bridgeId: string;
@@ -83,62 +92,76 @@ function isEnvironment(
   return value === "development" || value === "staging" || value === "production";
 }
 
+function normalizeBridgeItems(value: unknown): BridgeItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is BridgeItem => {
+      if (!item || typeof item !== "object") return false;
+      if (typeof item.id !== "string") return false;
+      if (typeof item.name !== "string") return false;
+      if (typeof item.endpoint !== "string") return false;
+      if (typeof item.createdAt !== "string") return false;
+      if (!isBridgeType(item.bridgeType)) return false;
+      if (!isEnvironment(item.environment)) return false;
+      if (
+        item.entryKind !== undefined &&
+        (typeof item.entryKind !== "string" || !isBridgeEntryKind(item.entryKind))
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .map((item) => ({
+      ...item,
+      entryKind: item.entryKind ?? "bridge",
+      chapterBlockIds: Array.isArray(item.chapterBlockIds)
+        ? item.chapterBlockIds.filter((id): id is string => typeof id === "string")
+        : [],
+      parentChapterId:
+        typeof item.parentChapterId === "string" ? item.parentChapterId : null,
+    }))
+    .map((item, _, items) => {
+      if (item.parentChapterId) return item;
+
+      const legacyParent =
+        items.find((candidate) => (candidate.chapterBlockIds ?? []).includes(item.id))?.id ??
+        null;
+
+      return {
+        ...item,
+        parentChapterId: legacyParent,
+      };
+    });
+}
+
 export function loadBridges(): BridgeItem[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined") return SERVER_BRIDGES_SNAPSHOT;
 
   try {
     const raw = window.localStorage.getItem(BRIDGE_STORAGE_KEY);
-    if (!raw) return [];
+    if (bridgesSnapshotCache?.raw === raw) {
+      return bridgesSnapshotCache.items;
+    }
 
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((item): item is BridgeItem => {
-        if (!item || typeof item !== "object") return false;
-        if (typeof item.id !== "string") return false;
-        if (typeof item.name !== "string") return false;
-        if (typeof item.endpoint !== "string") return false;
-        if (typeof item.createdAt !== "string") return false;
-        if (!isBridgeType(item.bridgeType)) return false;
-        if (!isEnvironment(item.environment)) return false;
-        if (
-          item.entryKind !== undefined &&
-          (typeof item.entryKind !== "string" || !isBridgeEntryKind(item.entryKind))
-        ) {
-          return false;
-        }
-        return true;
-      })
-      .map((item) => ({
-        ...item,
-        entryKind: item.entryKind ?? "bridge",
-        chapterBlockIds: Array.isArray(item.chapterBlockIds)
-          ? item.chapterBlockIds.filter((id): id is string => typeof id === "string")
-          : [],
-        parentChapterId:
-          typeof item.parentChapterId === "string" ? item.parentChapterId : null,
-      }))
-      .map((item, _, items) => {
-        if (item.parentChapterId) return item;
-
-        const legacyParent =
-          items.find((candidate) => (candidate.chapterBlockIds ?? []).includes(item.id))?.id ??
-          null;
-
-        return {
-          ...item,
-          parentChapterId: legacyParent,
-        };
-      });
+    const parsed = raw ? JSON.parse(raw) : [];
+    const items = normalizeBridgeItems(parsed);
+    bridgesSnapshotCache = { raw, items };
+    return items;
   } catch {
-    return [];
+    return SERVER_BRIDGES_SNAPSHOT;
   }
 }
 
 export function saveBridges(items: BridgeItem[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(BRIDGE_STORAGE_KEY, JSON.stringify(items));
+  const raw = JSON.stringify(items);
+  window.localStorage.setItem(BRIDGE_STORAGE_KEY, raw);
+  bridgesSnapshotCache = {
+    raw,
+    items: normalizeBridgeItems(items),
+  };
+  window.dispatchEvent(new Event(BRIDGE_STORAGE_EVENT));
   cleanupOrphanedWorkspaceBridgeBlocks(items.map((item) => item.id));
 }
 

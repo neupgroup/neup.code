@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function BridgePage() {
-  redirect("/doc?type=bridge");
+  redirect("/doc");
 }

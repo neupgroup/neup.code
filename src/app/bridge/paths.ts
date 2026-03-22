@@ -1,13 +1,21 @@
 import type { BridgeItem } from "./bridge-storage";
 
 export function getBridgeDocRootHref() {
-  return "/doc?type=bridge";
+  return "/doc";
+}
+
+export function getPageDocHref(id: string) {
+  return `/doc?id=${id}`;
 }
 
 export function getChapterDocHref(id: string) {
-  return `/doc?id=${id}&block=chapter`;
+  return getPageDocHref(id);
+}
+
+export function getBridgeEditHref(id: string) {
+  return `/bridge/${id}/edit`;
 }
 
 export function getBridgeEntryHref(item: Pick<BridgeItem, "id" | "entryKind">) {
-  return item.entryKind === "chapter" ? getChapterDocHref(item.id) : `/bridge/${item.id}`;
+  return item.entryKind === "chapter" ? getPageDocHref(item.id) : `/bridge/${item.id}`;
 }

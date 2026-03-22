@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { PageBlocksEditor } from "../page-blocks-editor";
-import type { WorkspacePageKey } from "../page-blocks-storage";
+import { DocInstance } from "./doc-instance";
 
 export const metadata: Metadata = {
   title: "Doc",
@@ -13,20 +12,19 @@ type DocPageProps = {
 };
 
 export default async function DocPage({ searchParams }: DocPageProps) {
-  const { type, block } = await searchParams;
-  const pageKey = getDocPageKey(type, block);
+  const { type, id, block } = await searchParams;
 
-  if (!pageKey) {
-    redirect("/doc?type=bridge");
+  if (block === "chapter" && id) {
+    redirect(`/doc?id=${id}`);
   }
 
-  return <PageBlocksEditor key={pageKey} pageKey={pageKey} />;
-}
+  if (type === "bridge") {
+    return redirect("/doc");
+  }
 
-function getDocPageKey(type?: string, block?: string): WorkspacePageKey | null {
-  if (block === "chapter") return "bridge";
-  if (type === "bridge") return "bridge";
-  if (type === "design") return "design";
-  if (type === "component") return "components";
-  return null;
+  if (id === "bridge") {
+    redirect("/doc");
+  }
+
+  return <DocInstance id={id} />;
 }

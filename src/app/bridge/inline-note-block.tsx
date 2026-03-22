@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { ActionMenu } from "../action-menu";
 import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "./rich-text";
 
 export type SlashCommand = {
@@ -8,6 +17,14 @@ export type SlashCommand = {
   label: string;
   description?: string;
   keywords?: string[];
+  sectionTitle?: string;
+};
+
+export type InlineNoteSplit = {
+  beforeHtml: string;
+  afterHtml: string;
+  isAtStart: boolean;
+  isAtEnd: boolean;
 };
 
 type InlineNoteBlockProps = {
@@ -19,13 +36,24 @@ type InlineNoteBlockProps = {
   autoFocus?: boolean;
   autoFocusPosition?: "start" | "end";
   onAutoFocusComplete?: () => void;
-  onSplit?: () => void;
+  onSplit?: (split: InlineNoteSplit) => void;
   onBackspaceAtStart?: () => void;
   onNavigatePrevious?: () => void;
   onNavigateNext?: () => void;
   commands?: SlashCommand[];
   onSelectCommand?: (commandId: string) => void;
   maxVisibleCommands?: number;
+  onContextMenu?: (
+    event: React.MouseEvent<HTMLDivElement>,
+    details: {
+      hasSelection: boolean;
+      hasContent: boolean;
+    },
+  ) => void;
+};
+
+export type InlineNoteBlockHandle = {
+  applyFormat: (format: "bold" | "italic" | "underline") => void;
 };
 
 function isCaretAtStart(element: HTMLElement) {
@@ -56,7 +84,7 @@ function isCaretAtEnd(element: HTMLElement) {
   return (probe.toString() ?? "").length === 0;
 }
 
-export function InlineNoteBlock({
+export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlockProps>(function InlineNoteBlock({
   value,
   onChange,
   placeholder = "Type your note here...",
@@ -72,15 +100,21 @@ export function InlineNoteBlock({
   commands = [],
   onSelectCommand,
   maxVisibleCommands,
-}: InlineNoteBlockProps) {
+  onContextMenu,
+}, ref) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const savedSelectionRef = useRef<Range | null>(null);
   const commandItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const [slashQuery, setSlashQuery] = useState("");
-  const [isSlashMenuOpen, setIsSlashMenuOpen] = useState(false);
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
+  const [dismissedSlashValue, setDismissedSlashValue] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(null);
+  const slashMenuQuery = useMemo(() => getSlashQuery(value), [value]);
+  const slashQuery = slashMenuQuery ?? "";
+  const isSlashMenuOpen = Boolean(
+    slashMenuQuery !== null && commands.length && dismissedSlashValue !== value,
+  );
 
   const filteredCommands = useMemo(() => {
     const normalizedQuery = slashQuery.trim().toLowerCase();
@@ -99,6 +133,9 @@ export function InlineNoteBlock({
       return haystack.includes(normalizedQuery);
     });
   }, [commands, slashQuery]);
+  const visibleActiveCommandIndex = filteredCommands.length
+    ? Math.min(activeCommandIndex, filteredCommands.length - 1)
+    : 0;
 
   const menuListMaxHeight =
     maxVisibleCommands && maxVisibleCommands > 0
@@ -112,23 +149,13 @@ export function InlineNoteBlock({
   }, [value]);
 
   useEffect(() => {
-    const nextQuery = getSlashQuery(value);
-    setSlashQuery(nextQuery ?? "");
-    setIsSlashMenuOpen(Boolean(nextQuery !== null && commands.length));
-  }, [commands.length, value]);
-
-  useEffect(() => {
-    setActiveCommandIndex(0);
-  }, [slashQuery]);
-
-  useEffect(() => {
     if (!isSlashMenuOpen) return;
 
-    commandItemRefs.current[activeCommandIndex]?.scrollIntoView({
+    commandItemRefs.current[visibleActiveCommandIndex]?.scrollIntoView({
       block: "nearest",
       inline: "nearest",
     });
-  }, [activeCommandIndex, filteredCommands.length, isSlashMenuOpen]);
+  }, [filteredCommands.length, isSlashMenuOpen, visibleActiveCommandIndex]);
 
   useEffect(() => {
     if (!isSlashMenuOpen || !containerRef.current || !menuRef.current) return;
@@ -203,17 +230,33 @@ export function InlineNoteBlock({
     onAutoFocusComplete?.();
   }, [autoFocus, autoFocusPosition, onAutoFocusComplete]);
 
-  function updateSlashMenu(nextHtml: string) {
-    const nextQuery = getSlashQuery(nextHtml);
-    setSlashQuery(nextQuery ?? "");
-    setIsSlashMenuOpen(Boolean(nextQuery !== null && commands.length));
-  }
-
-  function syncValue() {
+  const syncValue = useCallback(() => {
     const nextValue = normalizeRichTextHtml(editorRef.current?.innerHTML ?? "");
+    if (dismissedSlashValue !== null && dismissedSlashValue !== nextValue) {
+      setDismissedSlashValue(null);
+      setActiveCommandIndex(0);
+    }
     onChange(nextValue);
-    updateSlashMenu(nextValue);
-  }
+  }, [dismissedSlashValue, onChange]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      applyFormat(format) {
+        if (typeof document === "undefined" || !editorRef.current) return;
+
+        editorRef.current.focus();
+
+        if (!restoreSavedSelection(savedSelectionRef.current, editorRef.current)) {
+          selectAllEditorContents(editorRef.current);
+        }
+
+        document.execCommand(format);
+        syncValue();
+      },
+    }),
+    [syncValue],
+  );
 
   function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -222,6 +265,14 @@ export function InlineNoteBlock({
       document.execCommand("insertText", false, text);
     }
     syncValue();
+  }
+
+  function handleContextMenu(event: React.MouseEvent<HTMLDivElement>) {
+    savedSelectionRef.current = getEditorSelectionRange(editorRef.current);
+    onContextMenu?.(event, {
+      hasSelection: Boolean(savedSelectionRef.current && !savedSelectionRef.current.collapsed),
+      hasContent: richTextHasContent(value),
+    });
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -242,15 +293,15 @@ export function InlineNoteBlock({
 
       if (event.key === "Escape") {
         event.preventDefault();
-        setIsSlashMenuOpen(false);
+        setDismissedSlashValue(value);
         return;
       }
 
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-        const selectedCommand = filteredCommands[activeCommandIndex];
+        const selectedCommand = filteredCommands[visibleActiveCommandIndex];
         if (selectedCommand) {
-          setIsSlashMenuOpen(false);
+          setDismissedSlashValue(value);
           onSelectCommand?.(selectedCommand.id);
         }
         return;
@@ -298,13 +349,15 @@ export function InlineNoteBlock({
     }
 
     event.preventDefault();
-    onSplit?.();
+    onSplit?.(getSplitAtSelection(editorRef.current, value));
   }
 
   return (
     <div ref={containerRef} className={`relative ${className}`.trim()}>
       {!richTextHasContent(value) ? (
-        <p className="pointer-events-none absolute left-0 top-0 text-[0.96rem] text-muted-foreground">
+        <p
+          className={`pointer-events-none absolute left-0 top-0 text-[0.96rem] leading-[1.7] text-foreground/40 ${editorClassName}`.trim()}
+        >
           {placeholder}
         </p>
       ) : null}
@@ -316,53 +369,41 @@ export function InlineNoteBlock({
         onBlur={syncValue}
         onPaste={handlePaste}
         onKeyDown={handleKeyDown}
+        onContextMenu={handleContextMenu}
         className={`text-[0.96rem] leading-[1.7] text-foreground outline-none ${editorClassName}`.trim()}
       />
 
       {isSlashMenuOpen && filteredCommands.length ? (
-        <div
+        <ActionMenu
           ref={menuRef}
-          className="absolute z-40 w-[264px] rounded-2xl border border-border bg-background p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)]"
+          items={filteredCommands.map((command) => ({
+            id: command.id,
+            label: command.label,
+            description: command.description,
+            sectionTitle: command.sectionTitle,
+            interaction: "mousedown",
+          }))}
+          activeItemId={filteredCommands[visibleActiveCommandIndex]?.id ?? null}
+          itemRefs={commandItemRefs}
+          className="absolute z-40 w-[264px] overflow-y-auto pr-1"
+          onSelectItem={(item) => {
+            setDismissedSlashValue(value);
+            onSelectCommand?.(item.id);
+          }}
           style={
             menuPosition
-              ? { left: menuPosition.left, top: menuPosition.top }
+              ? {
+                  left: menuPosition.left,
+                  top: menuPosition.top,
+                  maxHeight: menuListMaxHeight ?? undefined,
+                }
               : { left: -9999, top: -9999 }
           }
-        >
-          <div
-            className="grid gap-1 overflow-y-auto pr-1"
-            style={menuListMaxHeight ? { maxHeight: menuListMaxHeight } : undefined}
-          >
-            {filteredCommands.map((command, index) => (
-              <button
-                key={command.id}
-                ref={(element) => {
-                  commandItemRefs.current[index] = element;
-                }}
-                type="button"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setIsSlashMenuOpen(false);
-                  onSelectCommand?.(command.id);
-                }}
-                className={`flex min-h-[64px] w-full flex-col rounded-xl px-3 py-2 text-left transition ${
-                  index === activeCommandIndex ? "bg-muted" : "hover:bg-muted"
-                }`}
-              >
-                <span className="text-[0.88rem] font-medium text-foreground">{command.label}</span>
-                {command.description ? (
-                  <span className="mt-0.5 text-[0.76rem] text-muted-foreground">
-                    {command.description}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        </div>
+        />
       ) : null}
     </div>
   );
-}
+});
 
 function getSlashQuery(html: string) {
   const plainText = richTextToPlainText(html);
@@ -447,4 +488,101 @@ function getCollapsedCaretRect(range: Range) {
   }
 
   return null;
+}
+
+function getEditorSelectionRange(editor: HTMLDivElement | null) {
+  if (!editor) return null;
+
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount) return null;
+
+  const range = selection.getRangeAt(0);
+  if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) {
+    return null;
+  }
+
+  return range.cloneRange();
+}
+
+function restoreSavedSelection(range: Range | null, editor: HTMLDivElement) {
+  const selection = window.getSelection();
+  if (!selection) return false;
+
+  if (range && editor.contains(range.startContainer) && editor.contains(range.endContainer)) {
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }
+
+  return false;
+}
+
+function selectAllEditorContents(editor: HTMLDivElement) {
+  const selection = window.getSelection();
+  if (!selection) return;
+
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function getSplitAtSelection(
+  editor: HTMLDivElement | null,
+  fallbackValue: string,
+): InlineNoteSplit {
+  const normalizedFallback = normalizeRichTextHtml(fallbackValue);
+
+  if (!editor) {
+    return {
+      beforeHtml: normalizedFallback,
+      afterHtml: "",
+      isAtStart: !richTextHasContent(normalizedFallback),
+      isAtEnd: true,
+    };
+  }
+
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount) {
+    return {
+      beforeHtml: normalizedFallback,
+      afterHtml: "",
+      isAtStart: !richTextHasContent(normalizedFallback),
+      isAtEnd: true,
+    };
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) {
+    return {
+      beforeHtml: normalizedFallback,
+      afterHtml: "",
+      isAtStart: !richTextHasContent(normalizedFallback),
+      isAtEnd: true,
+    };
+  }
+
+  const beforeRange = document.createRange();
+  beforeRange.selectNodeContents(editor);
+  beforeRange.setEnd(range.startContainer, range.startOffset);
+
+  const afterRange = document.createRange();
+  afterRange.selectNodeContents(editor);
+  afterRange.setStart(range.endContainer, range.endOffset);
+
+  const beforeHtml = normalizeRichTextHtml(fragmentToHtml(beforeRange.cloneContents()));
+  const afterHtml = normalizeRichTextHtml(fragmentToHtml(afterRange.cloneContents()));
+
+  return {
+    beforeHtml,
+    afterHtml,
+    isAtStart: !richTextHasContent(beforeHtml),
+    isAtEnd: !richTextHasContent(afterHtml),
+  };
+}
+
+function fragmentToHtml(fragment: DocumentFragment) {
+  const container = document.createElement("div");
+  container.appendChild(fragment);
+  return container.innerHTML;
 }

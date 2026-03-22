@@ -16,7 +16,12 @@ import {
   type BridgeItem,
   type BridgeType,
 } from "../bridge-storage";
-import { getBridgeDocRootHref, getBridgeEntryHref, getChapterDocHref } from "../paths";
+import {
+  getBridgeDocRootHref,
+  getBridgeEditHref,
+  getBridgeEntryHref,
+  getChapterDocHref,
+} from "../paths";
 
 function createId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -279,17 +284,6 @@ export function NewBridgeForm({
         ) ?? null
       : null;
 
-  useEffect(() => {
-    if (mode === "edit" && bridge) {
-      const nextForm = bridgeToFormState(bridge);
-      setForm(nextForm);
-      setShowApiHeaders(nextForm.apiHeaders.length > 0);
-      setShowApiQueryParams(nextForm.apiQueryParams.length > 0);
-      setShowApiFormData(nextForm.apiFormData.length > 0);
-      setErrors({});
-    }
-  }, [bridge, mode]);
-
   function updateField<K extends keyof NewBridgeFormState>(
     field: K,
     value: NewBridgeFormState[K],
@@ -467,6 +461,8 @@ export function NewBridgeForm({
         ? item.entryKind === "chapter"
           ? getChapterDocHref(item.id)
           : `/bridge/${item.id}`
+        : item.entryKind === "bridge"
+          ? getBridgeEditHref(item.id)
         : targetChapter
           ? getChapterDocHref(targetChapter.id)
           : getBridgeDocRootHref(),
@@ -483,7 +479,7 @@ export function NewBridgeForm({
     : form.entryKind === "bridge"
       ? "Create a bridge entry and save it locally in your browser."
       : form.entryKind === "chapter"
-        ? "Create a chapter entry like a Notion page and save it locally in your browser."
+        ? "Create a page entry like a Notion page and save it locally in your browser."
         : "Create a note entry instantly.";
   const submitLabel = isSaving
     ? isEditMode
@@ -494,14 +490,14 @@ export function NewBridgeForm({
       : form.entryKind === "bridge"
         ? "Save bridge"
         : form.entryKind === "chapter"
-          ? "Save chapter"
+          ? "Save page"
           : "Save note";
   const cancelHref = isEditMode && bridge ? getBridgeEntryHref(bridge) : targetChapter ? getChapterDocHref(targetChapter.id) : getBridgeDocRootHref();
   const backHref = isEditMode && bridge ? getBridgeEntryHref(bridge) : targetChapter ? getChapterDocHref(targetChapter.id) : getBridgeDocRootHref();
   const backLabel = isEditMode ? bridge?.name ?? "Bridge" : targetChapter?.name ?? "Bridge";
   const entryKindOptions = [
     { label: "Bridge", value: "bridge" },
-    { label: "Chapter", value: "chapter" },
+    { label: "Page", value: "chapter" },
     { label: "Note", value: "note" },
   ] as const;
   const bridgeTypeOptions = [
@@ -589,7 +585,7 @@ export function NewBridgeForm({
               {form.entryKind === "bridge"
                 ? "Bridge name"
                 : form.entryKind === "chapter"
-                  ? "Chapter title"
+                  ? "Page title"
                   : "Note title"}
             </span>
             <input
@@ -600,7 +596,7 @@ export function NewBridgeForm({
                 form.entryKind === "bridge"
                   ? "Primary API Bridge"
                   : form.entryKind === "chapter"
-                    ? "Architecture chapter"
+                    ? "Architecture page"
                     : "Implementation note"
               }
             />
@@ -844,7 +840,7 @@ export function NewBridgeForm({
               form.entryKind === "bridge"
                 ? "Public note (optional)"
                 : form.entryKind === "chapter"
-                  ? "Chapter content"
+                  ? "Page content"
                   : "Note content"
             }
             value={form.publicNote}
@@ -852,7 +848,7 @@ export function NewBridgeForm({
               form.entryKind === "bridge"
                 ? "Public-facing note or bridge summary..."
                 : form.entryKind === "chapter"
-                  ? "Write the chapter content here..."
+                  ? "Write the page content here..."
                   : "Write the note content here..."
             }
             onChange={(value) => updateField("publicNote", value)}

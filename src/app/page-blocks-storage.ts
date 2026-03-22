@@ -1,4 +1,4 @@
-export type WorkspacePageKey = "bridge" | "design" | "components";
+export type WorkspacePageKey = "bridge";
 export type WorkspacePageBlockKind =
   | "note"
   | "heading1"
@@ -7,8 +7,7 @@ export type WorkspacePageBlockKind =
   | "chapter"
   | "api"
   | "webhook"
-  | "grpc"
-  | "component";
+  | "grpc";
 
 export type WorkspacePageBlock = {
   id: string;
@@ -28,7 +27,7 @@ const BRIDGE_RESOURCE_BLOCK_KINDS = new Set<WorkspacePageBlockKind>([
 ]);
 
 function isWorkspacePageKey(value: string): value is WorkspacePageKey {
-  return value === "bridge" || value === "design" || value === "components";
+  return value === "bridge";
 }
 
 function isWorkspacePageBlockKind(value: string): value is WorkspacePageBlockKind {
@@ -40,8 +39,7 @@ function isWorkspacePageBlockKind(value: string): value is WorkspacePageBlockKin
     value === "chapter" ||
     value === "api" ||
     value === "webhook" ||
-    value === "grpc" ||
-    value === "component"
+    value === "grpc"
   );
 }
 
@@ -92,18 +90,12 @@ export function saveWorkspacePageBlocks(items: WorkspacePageBlock[]) {
 export function filterWorkspacePageBlocksByResources(
   blocks: WorkspacePageBlock[],
   validBridgeIds: string[],
-  validComponentIds: string[],
 ) {
   const bridgeIds = new Set(validBridgeIds);
-  const componentIds = new Set(validComponentIds);
 
   return blocks.filter((block) => {
     if (BRIDGE_RESOURCE_BLOCK_KINDS.has(block.kind)) {
       return !block.content || bridgeIds.has(block.content);
-    }
-
-    if (block.kind === "component") {
-      return !block.content || componentIds.has(block.content);
     }
 
     return true;
@@ -118,18 +110,6 @@ export function cleanupOrphanedWorkspaceBridgeBlocks(validBridgeIds: string[]) {
       !BRIDGE_RESOURCE_BLOCK_KINDS.has(block.kind) ||
       !block.content ||
       validIds.has(block.content),
-  );
-
-  if (nextBlocks.length !== currentBlocks.length) {
-    saveWorkspacePageBlocks(nextBlocks);
-  }
-}
-
-export function cleanupOrphanedWorkspaceComponentBlocks(validComponentIds: string[]) {
-  const validIds = new Set(validComponentIds);
-  const currentBlocks = loadWorkspacePageBlocks();
-  const nextBlocks = currentBlocks.filter(
-    (block) => block.kind !== "component" || !block.content || validIds.has(block.content),
   );
 
   if (nextBlocks.length !== currentBlocks.length) {

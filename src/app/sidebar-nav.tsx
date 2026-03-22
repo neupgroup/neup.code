@@ -1,17 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  BRIDGE_STORAGE_EVENT,
+  BRIDGE_STORAGE_KEY,
+  loadBridges,
+  saveBridges,
+  type BridgeItem,
+} from "./bridge/bridge-storage";
+import { getPageDocHref } from "./bridge/paths";
+import { loadWorkspaces, WORKSPACE_STORAGE_EVENT } from "./workspace/workspace-storage";
 
 type SidebarIconName =
   | "bridge"
-  | "components"
-  | "design"
   | "home"
   | "onboarding"
-  | "rules"
+  | "page"
+  | "plus"
+  | "profile"
   | "settings"
+  | "workspace";
 
 type SidebarLink = {
   href: string;
@@ -28,51 +38,32 @@ const sidebarGroups: SidebarGroup[] = [
   {
     title: "Main",
     links: [
-      { href: "/", label: "Home", icon: "home" },
-      { href: "/onboarding", label: "Onboarding", icon: "onboarding" },
-      { href: "/doc?type=component", label: "Components", icon: "components" },
-      { href: "/doc?type=design", label: "Design", icon: "design" },
-      { href: "/rules", label: "Rules", icon: "rules" },
+      { href: "/home", label: "Home", icon: "home" },
+      { href: "https://neupgroup.com/account", label: "Profile", icon: "profile" },
+      { href: "/workspace", label: "Workspace", icon: "workspace" },
+      { href: "/settings", label: "Settings", icon: "settings" },
     ],
-  },
-  {
-    title: "Bridge",
-    links: [{ href: "/doc?type=bridge", label: "Bridge", icon: "bridge" }],
-  },
-  {
-    title: "Settings",
-    links: [{ href: "/settings", label: "Settings", icon: "settings" }],
   },
 ];
 
-function isActivePath(currentPathname: string, currentType: string | null, href: string) {
+function isActivePath(currentPathname: string, currentDocId: string | null, href: string) {
   if (href === "/") {
     return currentPathname === "/";
   }
 
-  if (href === "/doc?type=bridge") {
+  if (href === "/home") {
+    return currentPathname === "/home" || currentPathname === "/";
+  }
+
+  if (href === "/workspace") {
+    return currentPathname === "/workspace";
+  }
+
+  if (href === "/doc") {
     return (
-      (currentPathname === "/doc" && currentType === "bridge") ||
+      (currentPathname === "/doc" && !currentDocId) ||
       currentPathname === "/bridge" ||
       currentPathname.startsWith("/bridge/")
-    );
-  }
-
-  if (href === "/doc?type=component") {
-    return (
-      (currentPathname === "/doc" && currentType === "component") ||
-      currentPathname === "/component" ||
-      currentPathname.startsWith("/component/") ||
-      currentPathname === "/components" ||
-      currentPathname.startsWith("/components/")
-    );
-  }
-
-  if (href === "/doc?type=design") {
-    return (
-      (currentPathname === "/doc" && currentType === "design") ||
-      currentPathname === "/design" ||
-      currentPathname.startsWith("/design/")
     );
   }
 
@@ -98,28 +89,41 @@ function SidebarIcon({ name }: { name: SidebarIconName }) {
           <path d="M18.5 14.5l.9 2.5 2.6.9-2.6.9-.9 2.6-.9-2.6-2.5-.9 2.5-.9.9-2.5z" />
         </svg>
       );
-    case "components":
+    case "profile":
       return (
         <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="4.5" y="4.5" width="6.5" height="6.5" />
-          <rect x="13" y="4.5" width="6.5" height="6.5" />
-          <rect x="4.5" y="13" width="6.5" height="6.5" />
-          <rect x="13" y="13" width="6.5" height="6.5" />
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
         </svg>
       );
-    case "design":
+    case "workspace":
       return (
         <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M12 4.2a7.8 7.8 0 1 0 0 15.6h1.4a2.1 2.1 0 0 0 0-4.2h-.5a1.8 1.8 0 0 1 0-3.6h1.9a4 4 0 1 0 0-7.8H12z" />
-          <circle cx="8.2" cy="11.1" r="1" />
-          <circle cx="10.1" cy="8.2" r="1" />
-          <circle cx="13.7" cy="8.1" r="1" />
+          <path d="M4.5 6.5h15v11h-15z" />
+          <path d="M8 4.5v4" />
+          <path d="M16 4.5v4" />
+          <path d="M4.5 10.5h15" />
         </svg>
       );
     case "bridge":
       return (
         <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M3.5 12h5M15.5 12h5M8.5 12a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
+        </svg>
+      );
+    case "page":
+      return (
+        <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M7 4.5h7l4.5 4.5v10.5H7z" />
+          <path d="M14 4.5v4.5h4.5" />
+          <path d="M10 13h6" />
+          <path d="M10 16.5h4.5" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
         </svg>
       );
     case "settings":
@@ -129,29 +133,101 @@ function SidebarIcon({ name }: { name: SidebarIconName }) {
           <path d="M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.4.8a7.3 7.3 0 0 0-1.7-1L14.4 3h-4.8l-.4 2.8a7.3 7.3 0 0 0-1.7 1l-2.4-.8-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .3 0 .7.1 1l-2 1.6 2 3.4 2.4-.8c.5.4 1.1.7 1.7 1l.4 2.8h4.8l.4-2.8c.6-.3 1.2-.6 1.7-1l2.4.8 2-3.4-2-1.6c.1-.3.1-.7.1-1Z" />
         </svg>
       );
-    case "rules":
-      return (
-        <svg viewBox="0 0 24 24" className={baseClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M7 5.5h10" />
-          <path d="M7 9.5h10" />
-          <path d="M7 13.5h6" />
-          <path d="M5 4.5h14v15H5z" />
-        </svg>
-      );
     default:
       return null;
   }
 }
 
 export function SidebarNav() {
+  const router = useRouter();
   const pathname = usePathname();
-  const [docType, setDocType] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const docId = searchParams.get("id");
+  const [notePages, setNotePages] = useState<BridgeItem[]>([]);
+  const [workspaceName, setWorkspaceName] = useState("Workspace");
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const nextType = new URLSearchParams(window.location.search).get("type");
-    setDocType(nextType);
-  }, [pathname]);
+    function syncWorkspace() {
+      const items = loadWorkspaces();
+      if (items.length > 0) {
+        setWorkspaceName(items[0].name);
+      }
+    }
+    syncWorkspace();
+    window.addEventListener(WORKSPACE_STORAGE_EVENT, syncWorkspace);
+    return () => window.removeEventListener(WORKSPACE_STORAGE_EVENT, syncWorkspace);
+  }, []);
+
+  useEffect(() => {
+    function syncNotePages() {
+      const currentBridges = loadBridges();
+      const rootPages = currentBridges.filter(
+        (item) => (item.entryKind ?? "bridge") === "chapter" && !item.parentChapterId,
+      );
+
+      if (rootPages.length === 0) {
+        const nextIndexPage: BridgeItem = {
+          id:
+            typeof crypto !== "undefined" && "randomUUID" in crypto
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          name: "Index",
+          entryKind: "chapter",
+          bridgeType: "api",
+          endpoint: "",
+          environment: "development",
+          createdAt: new Date().toISOString(),
+        };
+        const nextBridges = [nextIndexPage, ...currentBridges];
+        saveBridges(nextBridges);
+        setNotePages([nextIndexPage]);
+        return;
+      }
+
+      const orderedPages = [...rootPages].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      setNotePages(orderedPages);
+    }
+
+    syncNotePages();
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key && event.key !== BRIDGE_STORAGE_KEY) return;
+      syncNotePages();
+    }
+
+    function handleBridgeUpdate() {
+      syncNotePages();
+    }
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(BRIDGE_STORAGE_EVENT, handleBridgeUpdate);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(BRIDGE_STORAGE_EVENT, handleBridgeUpdate);
+    };
+  }, []);
+
+  function handleAddPage() {
+    const nextPage: BridgeItem = {
+      id:
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name: "Untitled page",
+      entryKind: "chapter",
+      bridgeType: "api",
+      endpoint: "",
+      environment: "development",
+      createdAt: new Date().toISOString(),
+    };
+    const nextBridges = [...loadBridges(), nextPage];
+    saveBridges(nextBridges);
+    setNotePages((current) => [...current, nextPage]);
+    router.push(getPageDocHref(nextPage.id));
+  }
 
   return (
     <nav className="space-y-7">
@@ -162,7 +238,7 @@ export function SidebarNav() {
           </p>
           <div className="space-y-1">
             {group.links.map((item) => {
-              const isActive = isActivePath(pathname, docType, item.href);
+              const isActive = isActivePath(pathname, docId, item.href);
 
               return (
                 <Link
@@ -183,6 +259,42 @@ export function SidebarNav() {
           </div>
         </div>
       ))}
+
+      <div className="space-y-2">
+        <p className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground truncate" title={workspaceName}>
+          {workspaceName}
+        </p>
+        <div className="space-y-1">
+          {notePages.map((page) => {
+            const href = getPageDocHref(page.id);
+            const isActive = pathname === "/doc" && docId === page.id;
+
+            return (
+              <Link
+                key={page.id}
+                href={href}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex h-10 items-center gap-2 rounded-xl px-3 text-[0.93rem] font-semibold tracking-[0] transition ${
+                  isActive
+                    ? "bg-muted text-foreground"
+                    : "text-foreground/75 hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <SidebarIcon name="page" />
+                <span className="truncate">{page.name?.trim() || "Untitled page"}</span>
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={handleAddPage}
+            className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-[0.93rem] font-semibold tracking-[0] text-foreground/75 transition hover:bg-muted hover:text-foreground"
+          >
+            <SidebarIcon name="plus" />
+            Add a page
+          </button>
+        </div>
+      </div>
     </nav>
   );
 }

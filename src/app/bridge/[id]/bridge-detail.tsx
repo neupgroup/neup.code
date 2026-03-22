@@ -16,7 +16,7 @@ import {
   type BridgeItem,
   type BridgeRunRecord,
 } from "../bridge-storage";
-import { InlineNoteBlock, type SlashCommand } from "../inline-note-block";
+import { InlineNoteBlock, type InlineNoteSplit, type SlashCommand } from "../inline-note-block";
 import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../rich-text";
 import {
   BRIDGE_SESSION_STORAGE_KEY,
@@ -288,10 +288,6 @@ function buildRunOutput(bridge: BridgeItem) {
   return lines.join("\n");
 }
 
-function stripHtml(html: string) {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
 function keyValueItemsToUrl(url: string, items: BridgeKeyValueItem[]) {
   const nextUrl = new URL(url);
 
@@ -485,29 +481,16 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     persistChapterBridges(nextBridges);
   }
 
-  function createChildNoteAfter(noteId: string) {
-    if (!bridge) return;
-
-    const nextNote = createTextBlock("note", bridge.id);
-
-    const allBridges = loadBridges();
-    const sourceIndex = allBridges.findIndex((item) => item.id === noteId);
-    if (sourceIndex === -1) return;
-
-    const nextBridges = [...allBridges];
-    nextBridges.splice(sourceIndex + 1, 0, nextNote);
-    persistChapterBridges(nextBridges);
-    setFocusedChildNoteTarget({ id: nextNote.id, position: "end" });
-  }
-
-  function handleChildTextBlockSplit(blockId: string) {
+  function handleChildTextBlockSplit(blockId: string, split: InlineNoteSplit) {
     const allBridges = loadBridges();
     const currentBlock = allBridges.find((item) => item.id === blockId);
     if (!bridge || !currentBlock || !isTextEntryKind(currentBlock.entryKind)) return;
 
     if (currentBlock.entryKind === "note") {
-      const command = richTextToPlainText(currentBlock.publicNote ?? currentBlock.notes ?? "");
-      const nextKind: HeadingEntryKind | "note" | null = bridgeCommandToEntryKind(command);
+      const command = richTextToPlainText(split.beforeHtml);
+      const nextKind: HeadingEntryKind | "note" | null = !richTextHasContent(split.afterHtml)
+        ? bridgeCommandToEntryKind(command)
+        : null;
 
       if (nextKind) {
         const nextBridges = allBridges.map((item) =>
@@ -541,7 +524,27 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
       }
     }
 
-    createChildNoteAfter(blockId);
+    const sourceIndex = allBridges.findIndex((item) => item.id === blockId);
+    if (sourceIndex === -1) return;
+
+    const nextNote = {
+      ...createTextBlock("note", bridge.id),
+      publicNote: normalizeRichTextHtml(split.afterHtml) || undefined,
+      notes: undefined,
+    };
+    const nextBridges = allBridges.map((item) =>
+      item.id === blockId
+        ? {
+            ...item,
+            publicNote: normalizeRichTextHtml(split.beforeHtml) || undefined,
+            notes: undefined,
+          }
+        : item,
+    );
+
+    nextBridges.splice(sourceIndex + 1, 0, nextNote);
+    persistChapterBridges(nextBridges);
+    setFocusedChildNoteTarget({ id: nextNote.id, position: "start" });
   }
 
   function handleChildSlashCommandSelection(blockId: string, commandId: string) {
@@ -695,7 +698,6 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     const currentSearch = typeof window !== "undefined" ? window.location.search : "";
     const isOnTargetRoute =
       pathname === "/doc" &&
-      new URLSearchParams(currentSearch).get("type") === "bridge" &&
       new URLSearchParams(currentSearch).get("id") === bridge.id &&
       new URLSearchParams(currentSearch).get("block") === "chapter";
 
@@ -1170,7 +1172,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
                         autoFocus={focusedChildNoteTarget?.id === block.id}
                         autoFocusPosition={focusedChildNoteTarget?.position ?? "end"}
                         onAutoFocusComplete={() => setFocusedChildNoteTarget(null)}
-                        onSplit={() => handleChildTextBlockSplit(block.id)}
+                        onSplit={(split) => handleChildTextBlockSplit(block.id, split)}
                         onBackspaceAtStart={() => mergeChildNoteBackward(block.id)}
                         onNavigatePrevious={() => focusPreviousChildNote(block.id)}
                         onNavigateNext={() => focusNextChildNote(block.id)}

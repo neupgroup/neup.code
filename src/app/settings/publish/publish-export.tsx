@@ -6,7 +6,6 @@ import {
   richTextToMarkdown,
   richTextToPlainText,
 } from "../../bridge/rich-text";
-import { loadComponents, type ComponentItem } from "../../components/component-storage";
 import {
   loadWorkspacePageBlocks,
   type WorkspacePageBlock,
@@ -15,7 +14,7 @@ import {
 import { buildZip } from "./zip";
 
 const ONBOARDING_STORAGE_KEY = "neup.code.onboarding.github-flow.v1";
-const DOC_PAGE_KEYS: WorkspacePageKey[] = ["bridge", "design", "components"];
+const DOC_PAGE_KEYS: WorkspacePageKey[] = ["bridge"];
 
 type OnboardingState = {
   repo?: string;
@@ -29,14 +28,12 @@ type ExportManifest = {
   generatedAt: string;
   onboarding: OnboardingState;
   bridges: BridgeItem[];
-  components: ComponentItem[];
   workspacePageBlocks: WorkspacePageBlock[];
 };
 
 type ExportSnapshot = {
   onboarding: OnboardingState;
   bridges: BridgeItem[];
-  components: ComponentItem[];
   workspacePageBlocks: WorkspacePageBlock[];
 };
 
@@ -127,31 +124,6 @@ function loadOnboardingState() {
   }
 }
 
-function buildComponentMarkdown(component: ComponentItem) {
-  const sections: string[] = [`# ${component.name}`, ""];
-
-  if (component.description?.trim()) {
-    sections.push(component.description.trim(), "");
-  }
-
-  if (!component.parts.length) {
-    sections.push("No component parts added.");
-    return sections.join("\n");
-  }
-
-  component.parts.forEach((part, index) => {
-    sections.push(`## ${part.label || `Part ${index + 1}`}`, "");
-
-    if (part.description?.trim()) {
-      sections.push(part.description.trim(), "");
-    }
-
-    sections.push("```txt", part.code, "```", "");
-  });
-
-  return sections.join("\n").trimEnd();
-}
-
 function buildBridgeMarkdown(bridge: BridgeItem) {
   const sections: string[] = [
     `# ${bridge.name}`,
@@ -193,19 +165,10 @@ function buildBridgeMarkdown(bridge: BridgeItem) {
 }
 
 function buildIndexMarkdown(
-  componentFiles: Array<{ fileName: string }>,
   bridgeFiles: Array<{ fileName: string }>,
   pageFiles: Array<{ fileName: string }>,
 ) {
-  const lines = ["components:"];
-
-  if (componentFiles.length) {
-    lines.push(...componentFiles.map((file) => `-> ${file.fileName}`));
-  } else {
-    lines.push("-> none");
-  }
-
-  lines.push("", "bridge:");
+  const lines = ["bridge:"];
 
   if (bridgeFiles.length) {
     lines.push(...bridgeFiles.map((file) => `-> ${file.fileName}`));
@@ -226,25 +189,13 @@ function buildIndexMarkdown(
 
 function getPageTitle(pageKey: WorkspacePageKey) {
   if (pageKey === "bridge") return "Bridge";
-  if (pageKey === "design") return "Design";
-  return "Components";
+  return "Bridge";
 }
 
 function getLinkedBlockLabel(
   block: WorkspacePageBlock,
   bridges: BridgeItem[],
-  components: ComponentItem[],
 ) {
-  if (block.kind === "component") {
-    const component = components.find((item) => item.id === block.content);
-    if (component) {
-      return `> Component block: ${component.name}`;
-    }
-
-    return block.content
-      ? `> Component block: Missing component (${block.content})`
-      : "> Component block: Unlinked";
-  }
 
   if (block.kind === "chapter" || block.kind === "api" || block.kind === "webhook" || block.kind === "grpc") {
     const bridge = bridges.find((item) => item.id === block.content);
@@ -273,7 +224,6 @@ function buildPageMarkdown(
   pageKey: WorkspacePageKey,
   blocks: WorkspacePageBlock[],
   bridges: BridgeItem[],
-  components: ComponentItem[],
 ) {
   const sections: string[] = [`# ${getPageTitle(pageKey)}`, ""];
   const pageBlocks = blocks.filter((block) => block.pageKey === pageKey);
@@ -294,7 +244,7 @@ function buildPageMarkdown(
       return;
     }
 
-    const linkedBlock = getLinkedBlockLabel(block, bridges, components);
+    const linkedBlock = getLinkedBlockLabel(block, bridges);
     if (linkedBlock) {
       sections.push(linkedBlock, "");
     }
@@ -313,18 +263,8 @@ function buildZipEntries(snapshot: ExportSnapshot) {
       generatedAt: new Date().toISOString(),
       onboarding: snapshot.onboarding,
       bridges: snapshot.bridges,
-      components: snapshot.components,
       workspacePageBlocks: snapshot.workspacePageBlocks,
     };
-
-    const componentFiles = snapshot.components.map((component, index) => {
-      const baseName = formatFileName(component.name, `component_${index + 1}`);
-      return {
-        fileName: `${baseName}.md`,
-        zipPath: `.docs/components/${baseName}.md`,
-        content: buildComponentMarkdown(component),
-      };
-    });
 
     const bridgeFiles = snapshot.bridges.map((bridge, index) => {
       const baseName = formatFileName(bridge.name, `bridge_${index + 1}`);
@@ -342,14 +282,12 @@ function buildZipEntries(snapshot: ExportSnapshot) {
         pageKey,
         snapshot.workspacePageBlocks,
         snapshot.bridges,
-        snapshot.components,
       ),
     }));
 
-    const indexContent = buildIndexMarkdown(componentFiles, bridgeFiles, pageFiles);
+    const indexContent = buildIndexMarkdown(bridgeFiles, pageFiles);
 
   return [
-    ...componentFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
     ...bridgeFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
     ...pageFiles.map(({ zipPath, content }) => ({ name: zipPath, content })),
     { name: ".docs/index.md", content: indexContent },
@@ -362,7 +300,6 @@ export function PublishExport() {
     return {
       onboarding: loadOnboardingState(),
       bridges: loadBridges(),
-      components: loadComponents(),
       workspacePageBlocks: loadWorkspacePageBlocks(),
     };
   }
