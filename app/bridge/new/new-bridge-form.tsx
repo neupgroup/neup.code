@@ -280,8 +280,8 @@ export function NewBridgeForm({
   const targetChapter =
     mode === "create" && targetChapterId
       ? loadBridges().find(
-          (item) => item.id === targetChapterId && (item.entryKind ?? "bridge") === "chapter",
-        ) ?? null
+        (item) => item.id === targetChapterId && (item.entryKind ?? "bridge") === "chapter",
+      ) ?? null
       : null;
 
   function updateField<K extends keyof NewBridgeFormState>(
@@ -414,8 +414,8 @@ export function NewBridgeForm({
       form.entryKind === "bridge" &&
       form.bridgeType === "webhook" ||
       (form.entryKind === "bridge" &&
-      form.bridgeType === "handshake" ||
-      form.bridgeType === "grpc")
+        form.bridgeType === "handshake" ||
+        form.bridgeType === "grpc")
     ) {
       item.requiredFields = cleanKeyValueItems(form.requiredFields);
     }
@@ -463,9 +463,9 @@ export function NewBridgeForm({
           : `/bridge/${item.id}`
         : item.entryKind === "bridge"
           ? getBridgeEditHref(item.id)
-        : targetChapter
-          ? getChapterDocHref(targetChapter.id)
-          : getBridgeDocRootHref(),
+          : targetChapter
+            ? getChapterDocHref(targetChapter.id)
+            : getBridgeDocRootHref(),
     );
     router.refresh();
   }
@@ -476,11 +476,11 @@ export function NewBridgeForm({
     ? "Update the saved entry settings. Changes stay in your browser locally."
     : targetChapter
       ? `Create a new block and place it inside ${targetChapter.name}.`
-    : form.entryKind === "bridge"
-      ? "Create a bridge entry and save it locally in your browser."
-      : form.entryKind === "chapter"
-        ? "Create a page entry like a Notion page and save it locally in your browser."
-        : "Create a note entry instantly.";
+      : form.entryKind === "bridge"
+        ? "Create a bridge entry and save it locally in your browser."
+        : form.entryKind === "chapter"
+          ? "Create a page entry like a Notion page and save it locally in your browser."
+          : "Create a note entry instantly.";
   const submitLabel = isSaving
     ? isEditMode
       ? "Saving changes..."
@@ -553,11 +553,10 @@ export function NewBridgeForm({
                       <button
                         type="button"
                         onClick={() => updateField("entryKind", option.value as BridgeEntryKind)}
-                        className={`transition ${
-                          isActive
-                            ? "underline decoration-[1.5px] underline-offset-[5px]"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
+                        className={`transition ${isActive
+                          ? "underline decoration-[1.5px] underline-offset-[5px]"
+                          : "text-muted-foreground hover:text-foreground"
+                          }`}
                       >
                         {option.label.toLowerCase()}
                       </button>

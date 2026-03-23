@@ -81,7 +81,14 @@ function parseDate(value: unknown) {
 async function requireAccountId() {
   const cookieStore = await cookies();
   const accountId = cookieStore.get("auth_account_id")?.value?.trim();
-  return accountId || null;
+  const sessionId = cookieStore.get("auth_session_id")?.value?.trim();
+  const sessionKey = cookieStore.get("auth_session_key")?.value?.trim();
+
+  if (!accountId || !sessionId || !sessionKey) {
+    return null;
+  }
+
+  return accountId;
 }
 
 let ensuredSchema = false;
