@@ -2,20 +2,13 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/prisma/generated/client";
-import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type SyncWorkspace = {
   id: string;
-  name: string;
   permit?: string;
-  description?: string;
-  sharedWith?: string[];
-  isHidden?: boolean;
-  isDefault?: boolean;
-  createdAt?: string;
 };
 
 type SyncPage = {
@@ -30,7 +23,7 @@ type SyncPage = {
 type SyncBlock = {
   id: string;
   pageId: string;
-  kind: string;
+  type: string;
   content: string;
   position: number;
   createdAt?: string;
@@ -55,14 +48,22 @@ type SyncBridge = {
   createdAt?: string;
 };
 
-type SyncPayloadV2 = {
-  version: 2;
+type SyncPinnedPages = {
+  id: string;
+  workspaceId: string;
+  pageIds: string[];
+  orderBy: string;
+};
+
+type SyncPayloadV3 = {
+  version: 3;
   fullSync: boolean;
   bufferedAt: string;
   workspaces: SyncWorkspace[];
   pages: SyncPage[];
   blocks: SyncBlock[];
   bridges: SyncBridge[];
+  pinnedPages: SyncPinnedPages[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -89,6 +90,10 @@ function toBridgeJsonField(
   return Prisma.DbNull;
 }
 
+function toPageIdsJsonField(value: string[]): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
+
 async function requireAccountId() {
   const cookieStore = await cookies();
   const accountId = cookieStore.get("auth_account_id")?.value?.trim();
@@ -110,9 +115,9 @@ async function ensureSchema() {
   await prisma.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "public";`);
 
   await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "accounts" (
+    CREATE TABLE IF NOT EXISTS "account" (
       "id" TEXT NOT NULL,
-      CONSTRAINT "accounts_pkey" PRIMARY KEY ("id")
+      CONSTRAINT "account_pkey" PRIMARY KEY ("id")
     );
   `);
 
@@ -120,20 +125,13 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS "workspace" (
       "id" TEXT NOT NULL,
       "account_id" TEXT NOT NULL,
-      "name" TEXT NOT NULL,
       "permit" TEXT NOT NULL DEFAULT 'owner',
-      "description" TEXT NOT NULL DEFAULT '',
-      "shared_with" TEXT[] DEFAULT ARRAY[]::TEXT[],
-      "is_hidden" BOOLEAN NOT NULL DEFAULT false,
-      "is_default" BOOLEAN NOT NULL DEFAULT false,
-      "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updated_at" TIMESTAMP(3) NOT NULL,
       CONSTRAINT "workspace_pkey" PRIMARY KEY ("id")
     );
   `);
 
   await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "pages" (
+    CREATE TABLE IF NOT EXISTS "page" (
       "id" TEXT NOT NULL,
       "workspace_id" TEXT NOT NULL,
       "title" TEXT NOT NULL,
@@ -141,21 +139,38 @@ async function ensureSchema() {
       "cover" TEXT,
       "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updated_at" TIMESTAMP(3) NOT NULL,
-      CONSTRAINT "pages_pkey" PRIMARY KEY ("id")
+      CONSTRAINT "page_pkey" PRIMARY KEY ("id")
     );
   `);
 
   await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "page_blocks" (
+    CREATE TABLE IF NOT EXISTS "block" (
       "id" TEXT NOT NULL,
       "page_id" TEXT NOT NULL,
-      "kind" TEXT NOT NULL,
+      "type" TEXT NOT NULL,
       "content" TEXT NOT NULL DEFAULT '',
-      "position" INTEGER NOT NULL,
+      "position" INTEGER NOT NULL DEFAULT 0,
       "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updated_at" TIMESTAMP(3) NOT NULL,
-      CONSTRAINT "page_blocks_pkey" PRIMARY KEY ("id")
+      CONSTRAINT "block_pkey" PRIMARY KEY ("id")
     );
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "pinned_pages" (
+      "id" TEXT NOT NULL,
+      "workspace_id" TEXT NOT NULL,
+      "page_ids" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "order_by" TEXT NOT NULL DEFAULT 'custom',
+      "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updated_at" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "pinned_pages_pkey" PRIMARY KEY ("id")
+    );
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "pinned_pages_workspace_id_key"
+    ON "pinned_pages"("workspace_id");
   `);
 
   await prisma.$executeRawUnsafe(`
@@ -182,64 +197,40 @@ async function ensureSchema() {
   `);
 
   await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "history" (
-      "id" TEXT NOT NULL,
-      "page_id" TEXT NOT NULL,
-      "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "changes" JSONB NOT NULL,
-      "by" TEXT NOT NULL,
-      CONSTRAINT "history_pkey" PRIMARY KEY ("id")
-    );
+    CREATE INDEX IF NOT EXISTS "workspace_account_id_idx"
+    ON "workspace"("account_id");
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "page_workspace_id_idx"
+    ON "page"("workspace_id");
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "block_page_id_idx"
+    ON "block"("page_id");
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "block_page_id_position_idx"
+    ON "block"("page_id", "position");
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "bridges_workspace_id_idx"
+    ON "bridges"("workspace_id");
   `);
 
   ensuredSchema = true;
 }
 
-function isSyncPayloadV2(value: unknown): value is SyncPayloadV2 {
+function isSyncPayloadV3(value: unknown): value is SyncPayloadV3 {
   if (!isRecord(value)) return false;
-  if (value.version !== 2) return false;
+  if (value.version !== 3) return false;
   if (typeof value.fullSync !== "boolean") return false;
   if (typeof value.bufferedAt !== "string") return false;
   if (!Array.isArray(value.workspaces)) return false;
   if (!Array.isArray(value.pages)) return false;
   if (!Array.isArray(value.blocks)) return false;
   if (!Array.isArray(value.bridges)) return false;
+  if (!Array.isArray(value.pinnedPages)) return false;
   return true;
-}
-
-function diffBlocks(
-  previous: Array<Pick<SyncBlock, "id" | "kind" | "content" | "position">>,
-  next: SyncBlock[],
-) {
-  const prevById = new Map(previous.map((block) => [block.id, block]));
-  const nextById = new Map(next.map((block) => [block.id, block]));
-
-  const added: string[] = [];
-  const removed: string[] = [];
-  const updated: string[] = [];
-
-  for (const block of next) {
-    const existing = prevById.get(block.id);
-    if (!existing) {
-      added.push(block.id);
-      continue;
-    }
-    if (
-      existing.kind !== block.kind ||
-      existing.content !== block.content ||
-      existing.position !== block.position
-    ) {
-      updated.push(block.id);
-    }
-  }
-
-  for (const block of previous) {
-    if (!nextById.has(block.id)) {
-      removed.push(block.id);
-    }
-  }
-
-  return { added, removed, updated };
 }
 
 export async function GET() {
@@ -254,22 +245,27 @@ export async function GET() {
 
     const workspaces = await prisma.workspace.findMany({
       where: { accountId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { id: "asc" },
     });
 
-    const workspaceIds = workspaces.map((ws) => ws.id);
+    const workspaceIds = workspaces.map((workspace) => workspace.id);
     const pages = await prisma.page.findMany({
       where: { workspaceId: { in: workspaceIds } },
       orderBy: { createdAt: "asc" },
     });
 
     const pageIds = pages.map((page) => page.id);
-    const blocks = await prisma.pageBlock.findMany({
+    const blocks = await prisma.block.findMany({
       where: { pageId: { in: pageIds } },
       orderBy: [{ pageId: "asc" }, { position: "asc" }],
     });
 
     const bridges = await prisma.bridgeResource.findMany({
+      where: { workspaceId: { in: workspaceIds } },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const pinnedPages = await prisma.pinnedPages.findMany({
       where: { workspaceId: { in: workspaceIds } },
       orderBy: { createdAt: "asc" },
     });
@@ -281,6 +277,10 @@ export async function GET() {
       pages,
       blocks,
       bridges,
+      pinnedPages: pinnedPages.map((item) => ({
+        ...item,
+        pageIds: Array.isArray(item.pageIds) ? item.pageIds : [],
+      })),
     });
   } catch (error) {
     console.error("[api/state] GET failed:", error);
@@ -306,15 +306,17 @@ export async function POST(request: Request) {
     await prisma.account.upsert({ where: { id: accountId }, create: { id: accountId }, update: {} });
 
     const body = (await request.json()) as unknown;
-    if (!isSyncPayloadV2(body)) {
+    if (!isSyncPayloadV3(body)) {
       return NextResponse.json({ ok: false, error: "Invalid payload." }, { status: 400 });
     }
 
     const bufferedAt = parseDate(body.bufferedAt) ?? new Date();
-
-    const workspaceIds = body.workspaces.map((ws) => ws.id);
+    const workspaceIds = body.workspaces.map((workspace) => workspace.id);
     const pageIds = body.pages.map((page) => page.id);
+    const pinnedWorkspaceIds = body.pinnedPages.map((item) => item.workspaceId);
     const blocksByPage = new Map<string, SyncBlock[]>();
+    const pageWorkspaceById = new Map(body.pages.map((page) => [page.id, page.workspaceId]));
+
     for (const block of body.blocks) {
       const list = blocksByPage.get(block.pageId) ?? [];
       list.push(block);
@@ -336,6 +338,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Invalid bridge workspace." }, { status: 400 });
     }
 
+    const invalidPinnedPages = body.pinnedPages.filter((item) => {
+      if (!workspaceIds.includes(item.workspaceId)) return true;
+      if (!isStringArray(item.pageIds)) return true;
+      return item.pageIds.some((pageId) => pageWorkspaceById.get(pageId) !== item.workspaceId);
+    });
+    if (invalidPinnedPages.length) {
+      return NextResponse.json({ ok: false, error: "Invalid pinned page configuration." }, { status: 400 });
+    }
+
     await prisma.$transaction(async (tx) => {
       const workspaceConflicts = await tx.workspace.findMany({
         where: { id: { in: workspaceIds }, NOT: { accountId } },
@@ -354,47 +365,35 @@ export async function POST(request: Request) {
       }
 
       const bridgeConflicts = await tx.bridgeResource.findMany({
-        where: { id: { in: body.bridges.map((b) => b.id) }, workspace: { accountId: { not: accountId } } },
+        where: { id: { in: body.bridges.map((bridge) => bridge.id) }, workspace: { accountId: { not: accountId } } },
         select: { id: true },
       });
       if (bridgeConflicts.length) {
         throw new Error("Bridge id conflict.");
       }
 
-      const previousBlocks = await tx.pageBlock.findMany({
-        where: { pageId: { in: pageIds } },
-        select: { id: true, pageId: true, kind: true, content: true, position: true },
+      const pinnedConflicts = await tx.pinnedPages.findMany({
+        where: {
+          workspaceId: { in: pinnedWorkspaceIds },
+          workspace: { accountId: { not: accountId } },
+        },
+        select: { id: true },
       });
-
-      const previousByPage = new Map<string, Array<Pick<SyncBlock, "id" | "kind" | "content" | "position">>>();
-      for (const block of previousBlocks) {
-        const list = previousByPage.get(block.pageId) ?? [];
-        list.push({ id: block.id, kind: block.kind, content: block.content, position: block.position });
-        previousByPage.set(block.pageId, list);
+      if (pinnedConflicts.length) {
+        throw new Error("Pinned page configuration conflict.");
       }
 
-      for (const ws of body.workspaces) {
+      for (const workspace of body.workspaces) {
         await tx.workspace.upsert({
-          where: { id: ws.id },
+          where: { id: workspace.id },
           create: {
-            id: ws.id,
+            id: workspace.id,
             accountId,
-            name: ws.name,
-            permit: ws.permit ?? "owner",
-            description: ws.description ?? "",
-            sharedWith: ws.sharedWith ?? [],
-            isHidden: ws.isHidden ?? false,
-            isDefault: ws.isDefault ?? false,
-            createdAt: parseDate(ws.createdAt) ?? bufferedAt,
+            permit: workspace.permit ?? "owner",
           },
           update: {
             accountId,
-            name: ws.name,
-            permit: ws.permit ?? "owner",
-            description: ws.description ?? "",
-            sharedWith: ws.sharedWith ?? [],
-            isHidden: ws.isHidden ?? false,
-            isDefault: ws.isDefault ?? false,
+            permit: workspace.permit ?? "owner",
           },
         });
       }
@@ -460,21 +459,37 @@ export async function POST(request: Request) {
       }
 
       for (const block of body.blocks) {
-        await tx.pageBlock.upsert({
+        await tx.block.upsert({
           where: { id: block.id },
           create: {
             id: block.id,
             pageId: block.pageId,
-            kind: block.kind,
+            type: block.type,
             content: block.content,
             position: block.position,
             createdAt: parseDate(block.createdAt) ?? bufferedAt,
           },
           update: {
             pageId: block.pageId,
-            kind: block.kind,
+            type: block.type,
             content: block.content,
             position: block.position,
+          },
+        });
+      }
+
+      for (const item of body.pinnedPages) {
+        await tx.pinnedPages.upsert({
+          where: { workspaceId: item.workspaceId },
+          create: {
+            id: item.id,
+            workspaceId: item.workspaceId,
+            pageIds: toPageIdsJsonField(item.pageIds),
+            orderBy: item.orderBy,
+          },
+          update: {
+            pageIds: toPageIdsJsonField(item.pageIds),
+            orderBy: item.orderBy,
           },
         });
       }
@@ -482,7 +497,7 @@ export async function POST(request: Request) {
       if (body.fullSync) {
         for (const pageId of pageIds) {
           const incomingBlockIds = (blocksByPage.get(pageId) ?? []).map((block) => block.id);
-          await tx.pageBlock.deleteMany({
+          await tx.block.deleteMany({
             where: {
               pageId,
               ...(incomingBlockIds.length ? { id: { notIn: incomingBlockIds } } : {}),
@@ -500,7 +515,14 @@ export async function POST(request: Request) {
         await tx.bridgeResource.deleteMany({
           where: {
             workspaceId: { in: workspaceIds },
-            ...(body.bridges.length ? { id: { notIn: body.bridges.map((b) => b.id) } } : {}),
+            ...(body.bridges.length ? { id: { notIn: body.bridges.map((bridge) => bridge.id) } } : {}),
+          },
+        });
+
+        await tx.pinnedPages.deleteMany({
+          where: {
+            workspaceId: { in: workspaceIds },
+            ...(pinnedWorkspaceIds.length ? { NOT: { workspaceId: { in: pinnedWorkspaceIds } } } : {}),
           },
         });
 
@@ -510,37 +532,6 @@ export async function POST(request: Request) {
             ...(workspaceIds.length ? { id: { notIn: workspaceIds } } : {}),
           },
         });
-      }
-
-      const historyRows: Array<{
-        id: string;
-        pageId: string;
-        timestamp: Date;
-        changes: unknown;
-        by: string;
-      }> = [];
-
-      for (const page of body.pages) {
-        const previous = previousByPage.get(page.id) ?? [];
-        const next = (blocksByPage.get(page.id) ?? []).slice().sort((a, b) => a.position - b.position);
-        const diff = diffBlocks(previous, next);
-        if (!diff.added.length && !diff.removed.length && !diff.updated.length) continue;
-
-        historyRows.push({
-          id: randomUUID(),
-          pageId: page.id,
-          timestamp: bufferedAt,
-          changes: {
-            type: "sync",
-            bufferedAt: body.bufferedAt,
-            blocks: diff,
-          },
-          by: accountId,
-        });
-      }
-
-      if (historyRows.length) {
-        await tx.history.createMany({ data: historyRows as any });
       }
     });
 

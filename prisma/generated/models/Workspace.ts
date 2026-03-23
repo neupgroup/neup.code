@@ -27,38 +27,19 @@ export type AggregateWorkspace = {
 export type WorkspaceMinAggregateOutputType = {
   id: string | null
   accountId: string | null
-  name: string | null
   permit: string | null
-  description: string | null
-  isHidden: boolean | null
-  isDefault: boolean | null
-  createdAt: Date | null
-  updatedAt: Date | null
 }
 
 export type WorkspaceMaxAggregateOutputType = {
   id: string | null
   accountId: string | null
-  name: string | null
   permit: string | null
-  description: string | null
-  isHidden: boolean | null
-  isDefault: boolean | null
-  createdAt: Date | null
-  updatedAt: Date | null
 }
 
 export type WorkspaceCountAggregateOutputType = {
   id: number
   accountId: number
-  name: number
   permit: number
-  description: number
-  sharedWith: number
-  isHidden: number
-  isDefault: number
-  createdAt: number
-  updatedAt: number
   _all: number
 }
 
@@ -66,38 +47,19 @@ export type WorkspaceCountAggregateOutputType = {
 export type WorkspaceMinAggregateInputType = {
   id?: true
   accountId?: true
-  name?: true
   permit?: true
-  description?: true
-  isHidden?: true
-  isDefault?: true
-  createdAt?: true
-  updatedAt?: true
 }
 
 export type WorkspaceMaxAggregateInputType = {
   id?: true
   accountId?: true
-  name?: true
   permit?: true
-  description?: true
-  isHidden?: true
-  isDefault?: true
-  createdAt?: true
-  updatedAt?: true
 }
 
 export type WorkspaceCountAggregateInputType = {
   id?: true
   accountId?: true
-  name?: true
   permit?: true
-  description?: true
-  sharedWith?: true
-  isHidden?: true
-  isDefault?: true
-  createdAt?: true
-  updatedAt?: true
   _all?: true
 }
 
@@ -176,14 +138,7 @@ export type WorkspaceGroupByArgs<ExtArgs extends runtime.Types.Extensions.Intern
 export type WorkspaceGroupByOutputType = {
   id: string
   accountId: string
-  name: string
   permit: string
-  description: string
-  sharedWith: string[]
-  isHidden: boolean
-  isDefault: boolean
-  createdAt: Date
-  updatedAt: Date
   _count: WorkspaceCountAggregateOutputType | null
   _min: WorkspaceMinAggregateOutputType | null
   _max: WorkspaceMaxAggregateOutputType | null
@@ -210,32 +165,20 @@ export type WorkspaceWhereInput = {
   NOT?: Prisma.WorkspaceWhereInput | Prisma.WorkspaceWhereInput[]
   id?: Prisma.StringFilter<"Workspace"> | string
   accountId?: Prisma.StringFilter<"Workspace"> | string
-  name?: Prisma.StringFilter<"Workspace"> | string
   permit?: Prisma.StringFilter<"Workspace"> | string
-  description?: Prisma.StringFilter<"Workspace"> | string
-  sharedWith?: Prisma.StringNullableListFilter<"Workspace">
-  isHidden?: Prisma.BoolFilter<"Workspace"> | boolean
-  isDefault?: Prisma.BoolFilter<"Workspace"> | boolean
-  createdAt?: Prisma.DateTimeFilter<"Workspace"> | Date | string
-  updatedAt?: Prisma.DateTimeFilter<"Workspace"> | Date | string
   account?: Prisma.XOR<Prisma.AccountScalarRelationFilter, Prisma.AccountWhereInput>
   pages?: Prisma.PageListRelationFilter
+  pinnedPages?: Prisma.XOR<Prisma.PinnedPagesNullableScalarRelationFilter, Prisma.PinnedPagesWhereInput> | null
   bridges?: Prisma.BridgeResourceListRelationFilter
 }
 
 export type WorkspaceOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   accountId?: Prisma.SortOrder
-  name?: Prisma.SortOrder
   permit?: Prisma.SortOrder
-  description?: Prisma.SortOrder
-  sharedWith?: Prisma.SortOrder
-  isHidden?: Prisma.SortOrder
-  isDefault?: Prisma.SortOrder
-  createdAt?: Prisma.SortOrder
-  updatedAt?: Prisma.SortOrder
   account?: Prisma.AccountOrderByWithRelationInput
   pages?: Prisma.PageOrderByRelationAggregateInput
+  pinnedPages?: Prisma.PinnedPagesOrderByWithRelationInput
   bridges?: Prisma.BridgeResourceOrderByRelationAggregateInput
 }
 
@@ -245,30 +188,17 @@ export type WorkspaceWhereUniqueInput = Prisma.AtLeast<{
   OR?: Prisma.WorkspaceWhereInput[]
   NOT?: Prisma.WorkspaceWhereInput | Prisma.WorkspaceWhereInput[]
   accountId?: Prisma.StringFilter<"Workspace"> | string
-  name?: Prisma.StringFilter<"Workspace"> | string
   permit?: Prisma.StringFilter<"Workspace"> | string
-  description?: Prisma.StringFilter<"Workspace"> | string
-  sharedWith?: Prisma.StringNullableListFilter<"Workspace">
-  isHidden?: Prisma.BoolFilter<"Workspace"> | boolean
-  isDefault?: Prisma.BoolFilter<"Workspace"> | boolean
-  createdAt?: Prisma.DateTimeFilter<"Workspace"> | Date | string
-  updatedAt?: Prisma.DateTimeFilter<"Workspace"> | Date | string
   account?: Prisma.XOR<Prisma.AccountScalarRelationFilter, Prisma.AccountWhereInput>
   pages?: Prisma.PageListRelationFilter
+  pinnedPages?: Prisma.XOR<Prisma.PinnedPagesNullableScalarRelationFilter, Prisma.PinnedPagesWhereInput> | null
   bridges?: Prisma.BridgeResourceListRelationFilter
 }, "id">
 
 export type WorkspaceOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   accountId?: Prisma.SortOrder
-  name?: Prisma.SortOrder
   permit?: Prisma.SortOrder
-  description?: Prisma.SortOrder
-  sharedWith?: Prisma.SortOrder
-  isHidden?: Prisma.SortOrder
-  isDefault?: Prisma.SortOrder
-  createdAt?: Prisma.SortOrder
-  updatedAt?: Prisma.SortOrder
   _count?: Prisma.WorkspaceCountOrderByAggregateInput
   _max?: Prisma.WorkspaceMaxOrderByAggregateInput
   _min?: Prisma.WorkspaceMinOrderByAggregateInput
@@ -280,112 +210,60 @@ export type WorkspaceScalarWhereWithAggregatesInput = {
   NOT?: Prisma.WorkspaceScalarWhereWithAggregatesInput | Prisma.WorkspaceScalarWhereWithAggregatesInput[]
   id?: Prisma.StringWithAggregatesFilter<"Workspace"> | string
   accountId?: Prisma.StringWithAggregatesFilter<"Workspace"> | string
-  name?: Prisma.StringWithAggregatesFilter<"Workspace"> | string
   permit?: Prisma.StringWithAggregatesFilter<"Workspace"> | string
-  description?: Prisma.StringWithAggregatesFilter<"Workspace"> | string
-  sharedWith?: Prisma.StringNullableListFilter<"Workspace">
-  isHidden?: Prisma.BoolWithAggregatesFilter<"Workspace"> | boolean
-  isDefault?: Prisma.BoolWithAggregatesFilter<"Workspace"> | boolean
-  createdAt?: Prisma.DateTimeWithAggregatesFilter<"Workspace"> | Date | string
-  updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Workspace"> | Date | string
 }
 
 export type WorkspaceCreateInput = {
   id: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
   account: Prisma.AccountCreateNestedOneWithoutWorkspacesInput
   pages?: Prisma.PageCreateNestedManyWithoutWorkspaceInput
+  pinnedPages?: Prisma.PinnedPagesCreateNestedOneWithoutWorkspaceInput
   bridges?: Prisma.BridgeResourceCreateNestedManyWithoutWorkspaceInput
 }
 
 export type WorkspaceUncheckedCreateInput = {
   id: string
   accountId: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
   pages?: Prisma.PageUncheckedCreateNestedManyWithoutWorkspaceInput
+  pinnedPages?: Prisma.PinnedPagesUncheckedCreateNestedOneWithoutWorkspaceInput
   bridges?: Prisma.BridgeResourceUncheckedCreateNestedManyWithoutWorkspaceInput
 }
 
 export type WorkspaceUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   account?: Prisma.AccountUpdateOneRequiredWithoutWorkspacesNestedInput
   pages?: Prisma.PageUpdateManyWithoutWorkspaceNestedInput
+  pinnedPages?: Prisma.PinnedPagesUpdateOneWithoutWorkspaceNestedInput
   bridges?: Prisma.BridgeResourceUpdateManyWithoutWorkspaceNestedInput
 }
 
 export type WorkspaceUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   accountId?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   pages?: Prisma.PageUncheckedUpdateManyWithoutWorkspaceNestedInput
+  pinnedPages?: Prisma.PinnedPagesUncheckedUpdateOneWithoutWorkspaceNestedInput
   bridges?: Prisma.BridgeResourceUncheckedUpdateManyWithoutWorkspaceNestedInput
 }
 
 export type WorkspaceCreateManyInput = {
   id: string
   accountId: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
 }
 
 export type WorkspaceUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type WorkspaceUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   accountId?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type WorkspaceListRelationFilter = {
@@ -398,49 +276,22 @@ export type WorkspaceOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
 }
 
-export type StringNullableListFilter<$PrismaModel = never> = {
-  equals?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel> | null
-  has?: string | Prisma.StringFieldRefInput<$PrismaModel> | null
-  hasEvery?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel>
-  hasSome?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel>
-  isEmpty?: boolean
-}
-
 export type WorkspaceCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   accountId?: Prisma.SortOrder
-  name?: Prisma.SortOrder
   permit?: Prisma.SortOrder
-  description?: Prisma.SortOrder
-  sharedWith?: Prisma.SortOrder
-  isHidden?: Prisma.SortOrder
-  isDefault?: Prisma.SortOrder
-  createdAt?: Prisma.SortOrder
-  updatedAt?: Prisma.SortOrder
 }
 
 export type WorkspaceMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   accountId?: Prisma.SortOrder
-  name?: Prisma.SortOrder
   permit?: Prisma.SortOrder
-  description?: Prisma.SortOrder
-  isHidden?: Prisma.SortOrder
-  isDefault?: Prisma.SortOrder
-  createdAt?: Prisma.SortOrder
-  updatedAt?: Prisma.SortOrder
 }
 
 export type WorkspaceMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   accountId?: Prisma.SortOrder
-  name?: Prisma.SortOrder
   permit?: Prisma.SortOrder
-  description?: Prisma.SortOrder
-  isHidden?: Prisma.SortOrder
-  isDefault?: Prisma.SortOrder
-  createdAt?: Prisma.SortOrder
-  updatedAt?: Prisma.SortOrder
 }
 
 export type WorkspaceScalarRelationFilter = {
@@ -490,23 +341,6 @@ export type WorkspaceUncheckedUpdateManyWithoutAccountNestedInput = {
   deleteMany?: Prisma.WorkspaceScalarWhereInput | Prisma.WorkspaceScalarWhereInput[]
 }
 
-export type WorkspaceCreatesharedWithInput = {
-  set: string[]
-}
-
-export type WorkspaceUpdatesharedWithInput = {
-  set?: string[]
-  push?: string | string[]
-}
-
-export type BoolFieldUpdateOperationsInput = {
-  set?: boolean
-}
-
-export type DateTimeFieldUpdateOperationsInput = {
-  set?: Date | string
-}
-
 export type WorkspaceCreateNestedOneWithoutPagesInput = {
   create?: Prisma.XOR<Prisma.WorkspaceCreateWithoutPagesInput, Prisma.WorkspaceUncheckedCreateWithoutPagesInput>
   connectOrCreate?: Prisma.WorkspaceCreateOrConnectWithoutPagesInput
@@ -519,6 +353,20 @@ export type WorkspaceUpdateOneRequiredWithoutPagesNestedInput = {
   upsert?: Prisma.WorkspaceUpsertWithoutPagesInput
   connect?: Prisma.WorkspaceWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.WorkspaceUpdateToOneWithWhereWithoutPagesInput, Prisma.WorkspaceUpdateWithoutPagesInput>, Prisma.WorkspaceUncheckedUpdateWithoutPagesInput>
+}
+
+export type WorkspaceCreateNestedOneWithoutPinnedPagesInput = {
+  create?: Prisma.XOR<Prisma.WorkspaceCreateWithoutPinnedPagesInput, Prisma.WorkspaceUncheckedCreateWithoutPinnedPagesInput>
+  connectOrCreate?: Prisma.WorkspaceCreateOrConnectWithoutPinnedPagesInput
+  connect?: Prisma.WorkspaceWhereUniqueInput
+}
+
+export type WorkspaceUpdateOneRequiredWithoutPinnedPagesNestedInput = {
+  create?: Prisma.XOR<Prisma.WorkspaceCreateWithoutPinnedPagesInput, Prisma.WorkspaceUncheckedCreateWithoutPinnedPagesInput>
+  connectOrCreate?: Prisma.WorkspaceCreateOrConnectWithoutPinnedPagesInput
+  upsert?: Prisma.WorkspaceUpsertWithoutPinnedPagesInput
+  connect?: Prisma.WorkspaceWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.WorkspaceUpdateToOneWithWhereWithoutPinnedPagesInput, Prisma.WorkspaceUpdateWithoutPinnedPagesInput>, Prisma.WorkspaceUncheckedUpdateWithoutPinnedPagesInput>
 }
 
 export type WorkspaceCreateNestedOneWithoutBridgesInput = {
@@ -537,29 +385,17 @@ export type WorkspaceUpdateOneRequiredWithoutBridgesNestedInput = {
 
 export type WorkspaceCreateWithoutAccountInput = {
   id: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
   pages?: Prisma.PageCreateNestedManyWithoutWorkspaceInput
+  pinnedPages?: Prisma.PinnedPagesCreateNestedOneWithoutWorkspaceInput
   bridges?: Prisma.BridgeResourceCreateNestedManyWithoutWorkspaceInput
 }
 
 export type WorkspaceUncheckedCreateWithoutAccountInput = {
   id: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
   pages?: Prisma.PageUncheckedCreateNestedManyWithoutWorkspaceInput
+  pinnedPages?: Prisma.PinnedPagesUncheckedCreateNestedOneWithoutWorkspaceInput
   bridges?: Prisma.BridgeResourceUncheckedCreateNestedManyWithoutWorkspaceInput
 }
 
@@ -595,41 +431,22 @@ export type WorkspaceScalarWhereInput = {
   NOT?: Prisma.WorkspaceScalarWhereInput | Prisma.WorkspaceScalarWhereInput[]
   id?: Prisma.StringFilter<"Workspace"> | string
   accountId?: Prisma.StringFilter<"Workspace"> | string
-  name?: Prisma.StringFilter<"Workspace"> | string
   permit?: Prisma.StringFilter<"Workspace"> | string
-  description?: Prisma.StringFilter<"Workspace"> | string
-  sharedWith?: Prisma.StringNullableListFilter<"Workspace">
-  isHidden?: Prisma.BoolFilter<"Workspace"> | boolean
-  isDefault?: Prisma.BoolFilter<"Workspace"> | boolean
-  createdAt?: Prisma.DateTimeFilter<"Workspace"> | Date | string
-  updatedAt?: Prisma.DateTimeFilter<"Workspace"> | Date | string
 }
 
 export type WorkspaceCreateWithoutPagesInput = {
   id: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
   account: Prisma.AccountCreateNestedOneWithoutWorkspacesInput
+  pinnedPages?: Prisma.PinnedPagesCreateNestedOneWithoutWorkspaceInput
   bridges?: Prisma.BridgeResourceCreateNestedManyWithoutWorkspaceInput
 }
 
 export type WorkspaceUncheckedCreateWithoutPagesInput = {
   id: string
   accountId: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
+  pinnedPages?: Prisma.PinnedPagesUncheckedCreateNestedOneWithoutWorkspaceInput
   bridges?: Prisma.BridgeResourceUncheckedCreateNestedManyWithoutWorkspaceInput
 }
 
@@ -651,58 +468,82 @@ export type WorkspaceUpdateToOneWithWhereWithoutPagesInput = {
 
 export type WorkspaceUpdateWithoutPagesInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   account?: Prisma.AccountUpdateOneRequiredWithoutWorkspacesNestedInput
+  pinnedPages?: Prisma.PinnedPagesUpdateOneWithoutWorkspaceNestedInput
   bridges?: Prisma.BridgeResourceUpdateManyWithoutWorkspaceNestedInput
 }
 
 export type WorkspaceUncheckedUpdateWithoutPagesInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   accountId?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  pinnedPages?: Prisma.PinnedPagesUncheckedUpdateOneWithoutWorkspaceNestedInput
+  bridges?: Prisma.BridgeResourceUncheckedUpdateManyWithoutWorkspaceNestedInput
+}
+
+export type WorkspaceCreateWithoutPinnedPagesInput = {
+  id: string
+  permit?: string
+  account: Prisma.AccountCreateNestedOneWithoutWorkspacesInput
+  pages?: Prisma.PageCreateNestedManyWithoutWorkspaceInput
+  bridges?: Prisma.BridgeResourceCreateNestedManyWithoutWorkspaceInput
+}
+
+export type WorkspaceUncheckedCreateWithoutPinnedPagesInput = {
+  id: string
+  accountId: string
+  permit?: string
+  pages?: Prisma.PageUncheckedCreateNestedManyWithoutWorkspaceInput
+  bridges?: Prisma.BridgeResourceUncheckedCreateNestedManyWithoutWorkspaceInput
+}
+
+export type WorkspaceCreateOrConnectWithoutPinnedPagesInput = {
+  where: Prisma.WorkspaceWhereUniqueInput
+  create: Prisma.XOR<Prisma.WorkspaceCreateWithoutPinnedPagesInput, Prisma.WorkspaceUncheckedCreateWithoutPinnedPagesInput>
+}
+
+export type WorkspaceUpsertWithoutPinnedPagesInput = {
+  update: Prisma.XOR<Prisma.WorkspaceUpdateWithoutPinnedPagesInput, Prisma.WorkspaceUncheckedUpdateWithoutPinnedPagesInput>
+  create: Prisma.XOR<Prisma.WorkspaceCreateWithoutPinnedPagesInput, Prisma.WorkspaceUncheckedCreateWithoutPinnedPagesInput>
+  where?: Prisma.WorkspaceWhereInput
+}
+
+export type WorkspaceUpdateToOneWithWhereWithoutPinnedPagesInput = {
+  where?: Prisma.WorkspaceWhereInput
+  data: Prisma.XOR<Prisma.WorkspaceUpdateWithoutPinnedPagesInput, Prisma.WorkspaceUncheckedUpdateWithoutPinnedPagesInput>
+}
+
+export type WorkspaceUpdateWithoutPinnedPagesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  permit?: Prisma.StringFieldUpdateOperationsInput | string
+  account?: Prisma.AccountUpdateOneRequiredWithoutWorkspacesNestedInput
+  pages?: Prisma.PageUpdateManyWithoutWorkspaceNestedInput
+  bridges?: Prisma.BridgeResourceUpdateManyWithoutWorkspaceNestedInput
+}
+
+export type WorkspaceUncheckedUpdateWithoutPinnedPagesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  accountId?: Prisma.StringFieldUpdateOperationsInput | string
+  permit?: Prisma.StringFieldUpdateOperationsInput | string
+  pages?: Prisma.PageUncheckedUpdateManyWithoutWorkspaceNestedInput
   bridges?: Prisma.BridgeResourceUncheckedUpdateManyWithoutWorkspaceNestedInput
 }
 
 export type WorkspaceCreateWithoutBridgesInput = {
   id: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
   account: Prisma.AccountCreateNestedOneWithoutWorkspacesInput
   pages?: Prisma.PageCreateNestedManyWithoutWorkspaceInput
+  pinnedPages?: Prisma.PinnedPagesCreateNestedOneWithoutWorkspaceInput
 }
 
 export type WorkspaceUncheckedCreateWithoutBridgesInput = {
   id: string
   accountId: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
   pages?: Prisma.PageUncheckedCreateNestedManyWithoutWorkspaceInput
+  pinnedPages?: Prisma.PinnedPagesUncheckedCreateNestedOneWithoutWorkspaceInput
 }
 
 export type WorkspaceCreateOrConnectWithoutBridgesInput = {
@@ -723,82 +564,44 @@ export type WorkspaceUpdateToOneWithWhereWithoutBridgesInput = {
 
 export type WorkspaceUpdateWithoutBridgesInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   account?: Prisma.AccountUpdateOneRequiredWithoutWorkspacesNestedInput
   pages?: Prisma.PageUpdateManyWithoutWorkspaceNestedInput
+  pinnedPages?: Prisma.PinnedPagesUpdateOneWithoutWorkspaceNestedInput
 }
 
 export type WorkspaceUncheckedUpdateWithoutBridgesInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   accountId?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   pages?: Prisma.PageUncheckedUpdateManyWithoutWorkspaceNestedInput
+  pinnedPages?: Prisma.PinnedPagesUncheckedUpdateOneWithoutWorkspaceNestedInput
 }
 
 export type WorkspaceCreateManyAccountInput = {
   id: string
-  name: string
   permit?: string
-  description?: string
-  sharedWith?: Prisma.WorkspaceCreatesharedWithInput | string[]
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
 }
 
 export type WorkspaceUpdateWithoutAccountInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   pages?: Prisma.PageUpdateManyWithoutWorkspaceNestedInput
+  pinnedPages?: Prisma.PinnedPagesUpdateOneWithoutWorkspaceNestedInput
   bridges?: Prisma.BridgeResourceUpdateManyWithoutWorkspaceNestedInput
 }
 
 export type WorkspaceUncheckedUpdateWithoutAccountInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   pages?: Prisma.PageUncheckedUpdateManyWithoutWorkspaceNestedInput
+  pinnedPages?: Prisma.PinnedPagesUncheckedUpdateOneWithoutWorkspaceNestedInput
   bridges?: Prisma.BridgeResourceUncheckedUpdateManyWithoutWorkspaceNestedInput
 }
 
 export type WorkspaceUncheckedUpdateManyWithoutAccountInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
   permit?: Prisma.StringFieldUpdateOperationsInput | string
-  description?: Prisma.StringFieldUpdateOperationsInput | string
-  sharedWith?: Prisma.WorkspaceUpdatesharedWithInput | string[]
-  isHidden?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  isDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 
@@ -844,16 +647,10 @@ export type WorkspaceCountOutputTypeCountBridgesArgs<ExtArgs extends runtime.Typ
 export type WorkspaceSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   accountId?: boolean
-  name?: boolean
   permit?: boolean
-  description?: boolean
-  sharedWith?: boolean
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: boolean
-  updatedAt?: boolean
   account?: boolean | Prisma.AccountDefaultArgs<ExtArgs>
   pages?: boolean | Prisma.Workspace$pagesArgs<ExtArgs>
+  pinnedPages?: boolean | Prisma.Workspace$pinnedPagesArgs<ExtArgs>
   bridges?: boolean | Prisma.Workspace$bridgesArgs<ExtArgs>
   _count?: boolean | Prisma.WorkspaceCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["workspace"]>
@@ -861,48 +658,28 @@ export type WorkspaceSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
 export type WorkspaceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   accountId?: boolean
-  name?: boolean
   permit?: boolean
-  description?: boolean
-  sharedWith?: boolean
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: boolean
-  updatedAt?: boolean
   account?: boolean | Prisma.AccountDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["workspace"]>
 
 export type WorkspaceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   accountId?: boolean
-  name?: boolean
   permit?: boolean
-  description?: boolean
-  sharedWith?: boolean
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: boolean
-  updatedAt?: boolean
   account?: boolean | Prisma.AccountDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["workspace"]>
 
 export type WorkspaceSelectScalar = {
   id?: boolean
   accountId?: boolean
-  name?: boolean
   permit?: boolean
-  description?: boolean
-  sharedWith?: boolean
-  isHidden?: boolean
-  isDefault?: boolean
-  createdAt?: boolean
-  updatedAt?: boolean
 }
 
-export type WorkspaceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "accountId" | "name" | "permit" | "description" | "sharedWith" | "isHidden" | "isDefault" | "createdAt" | "updatedAt", ExtArgs["result"]["workspace"]>
+export type WorkspaceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "accountId" | "permit", ExtArgs["result"]["workspace"]>
 export type WorkspaceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   account?: boolean | Prisma.AccountDefaultArgs<ExtArgs>
   pages?: boolean | Prisma.Workspace$pagesArgs<ExtArgs>
+  pinnedPages?: boolean | Prisma.Workspace$pinnedPagesArgs<ExtArgs>
   bridges?: boolean | Prisma.Workspace$bridgesArgs<ExtArgs>
   _count?: boolean | Prisma.WorkspaceCountOutputTypeDefaultArgs<ExtArgs>
 }
@@ -918,19 +695,13 @@ export type $WorkspacePayload<ExtArgs extends runtime.Types.Extensions.InternalA
   objects: {
     account: Prisma.$AccountPayload<ExtArgs>
     pages: Prisma.$PagePayload<ExtArgs>[]
+    pinnedPages: Prisma.$PinnedPagesPayload<ExtArgs> | null
     bridges: Prisma.$BridgeResourcePayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     accountId: string
-    name: string
     permit: string
-    description: string
-    sharedWith: string[]
-    isHidden: boolean
-    isDefault: boolean
-    createdAt: Date
-    updatedAt: Date
   }, ExtArgs["result"]["workspace"]>
   composites: {}
 }
@@ -1327,6 +1098,7 @@ export interface Prisma__WorkspaceClient<T, Null = never, ExtArgs extends runtim
   readonly [Symbol.toStringTag]: "PrismaPromise"
   account<T extends Prisma.AccountDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.AccountDefaultArgs<ExtArgs>>): Prisma.Prisma__AccountClient<runtime.Types.Result.GetResult<Prisma.$AccountPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   pages<T extends Prisma.Workspace$pagesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Workspace$pagesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  pinnedPages<T extends Prisma.Workspace$pinnedPagesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Workspace$pinnedPagesArgs<ExtArgs>>): Prisma.Prisma__PinnedPagesClient<runtime.Types.Result.GetResult<Prisma.$PinnedPagesPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   bridges<T extends Prisma.Workspace$bridgesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Workspace$bridgesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$BridgeResourcePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -1359,14 +1131,7 @@ export interface Prisma__WorkspaceClient<T, Null = never, ExtArgs extends runtim
 export interface WorkspaceFieldRefs {
   readonly id: Prisma.FieldRef<"Workspace", 'String'>
   readonly accountId: Prisma.FieldRef<"Workspace", 'String'>
-  readonly name: Prisma.FieldRef<"Workspace", 'String'>
   readonly permit: Prisma.FieldRef<"Workspace", 'String'>
-  readonly description: Prisma.FieldRef<"Workspace", 'String'>
-  readonly sharedWith: Prisma.FieldRef<"Workspace", 'String[]'>
-  readonly isHidden: Prisma.FieldRef<"Workspace", 'Boolean'>
-  readonly isDefault: Prisma.FieldRef<"Workspace", 'Boolean'>
-  readonly createdAt: Prisma.FieldRef<"Workspace", 'DateTime'>
-  readonly updatedAt: Prisma.FieldRef<"Workspace", 'DateTime'>
 }
     
 
@@ -1789,6 +1554,25 @@ export type Workspace$pagesArgs<ExtArgs extends runtime.Types.Extensions.Interna
   take?: number
   skip?: number
   distinct?: Prisma.PageScalarFieldEnum | Prisma.PageScalarFieldEnum[]
+}
+
+/**
+ * Workspace.pinnedPages
+ */
+export type Workspace$pinnedPagesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PinnedPages
+   */
+  select?: Prisma.PinnedPagesSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PinnedPages
+   */
+  omit?: Prisma.PinnedPagesOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PinnedPagesInclude<ExtArgs> | null
+  where?: Prisma.PinnedPagesWhereInput
 }
 
 /**

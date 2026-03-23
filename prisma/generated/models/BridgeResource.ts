@@ -611,6 +611,10 @@ export type BridgeResourceUncheckedUpdateManyWithoutWorkspaceNestedInput = {
   deleteMany?: Prisma.BridgeResourceScalarWhereInput | Prisma.BridgeResourceScalarWhereInput[]
 }
 
+export type BoolFieldUpdateOperationsInput = {
+  set?: boolean
+}
+
 export type BridgeResourceCreateWithoutWorkspaceInput = {
   id: string
   name?: string

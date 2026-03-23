@@ -33,17 +33,17 @@ export type Workspace = Prisma.WorkspaceModel
  */
 export type Page = Prisma.PageModel
 /**
- * Model PageBlock
+ * Model Block
  * 
  */
-export type PageBlock = Prisma.PageBlockModel
+export type Block = Prisma.BlockModel
+/**
+ * Model PinnedPages
+ * 
+ */
+export type PinnedPages = Prisma.PinnedPagesModel
 /**
  * Model BridgeResource
  * 
  */
 export type BridgeResource = Prisma.BridgeResourceModel
-/**
- * Model History
- * 
- */
-export type History = Prisma.HistoryModel

@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  loadPinnedPagesForWorkspace,
+  upsertPinnedPages,
+  type PinnedPagesOrderBy,
+} from "../../pinned-pages-storage";
 import { loadWorkspaces, saveWorkspaces, type WorkspaceItem } from "../workspace-storage";
 
 export default function WorkspaceDetail() {
@@ -11,6 +16,13 @@ export default function WorkspaceDetail() {
   const workspaceId = params.id as string;
   const [workspace, setWorkspace] = useState<WorkspaceItem | null>(null);
   const [shareEmail, setShareEmail] = useState("");
+  const [pageOrderBy, setPageOrderBy] = useState<PinnedPagesOrderBy>("custom");
+
+  function createLocalId() {
+    return typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
 
   useEffect(() => {
     const items = loadWorkspaces();
@@ -19,6 +31,7 @@ export default function WorkspaceDetail() {
       router.push("/workspace");
     } else {
       setWorkspace(found);
+      setPageOrderBy(loadPinnedPagesForWorkspace(workspaceId)?.orderBy ?? "custom");
     }
   }, [router, workspaceId]);
 
@@ -82,6 +95,17 @@ export default function WorkspaceDetail() {
     const nextItems = items.filter((ws) => ws.id !== workspaceId);
     saveWorkspaces(nextItems);
     router.push("/workspace");
+  }
+
+  function handlePageOrderChange(nextOrderBy: PinnedPagesOrderBy) {
+    setPageOrderBy(nextOrderBy);
+    const existing = loadPinnedPagesForWorkspace(workspaceId);
+    upsertPinnedPages({
+      id: existing?.id ?? createLocalId(),
+      workspaceId,
+      pageIds: existing?.pageIds ?? [],
+      orderBy: nextOrderBy,
+    });
   }
 
   return (
@@ -170,6 +194,34 @@ export default function WorkspaceDetail() {
             </button>
           </div>
         </form>
+
+        <div className="mt-4 grid gap-3 rounded-lg border border-border bg-muted/20 p-5">
+          <div className="space-y-1">
+            <h2 className="text-[0.95rem] font-semibold tracking-[-0.01em] text-foreground">
+              Page order
+            </h2>
+            <p className="text-[0.84rem] text-muted-foreground">
+              Choose how this workspace orders its pinned pages in the sidebar.
+            </p>
+          </div>
+
+          <label className="grid gap-1.5">
+            <span className="text-[0.78rem] font-semibold text-muted-foreground">
+              Sidebar order
+            </span>
+            <select
+              value={pageOrderBy}
+              onChange={(event) => handlePageOrderChange(event.target.value as PinnedPagesOrderBy)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-[0.92rem]"
+            >
+              <option value="custom">Custom pinned order</option>
+              <option value="ascending.title">Ascending title</option>
+              <option value="descending.title">Descending title</option>
+              <option value="ascending.date">Ascending date</option>
+              <option value="descending.date">Descending date</option>
+            </select>
+          </label>
+        </div>
       </div>
     </section>
   );

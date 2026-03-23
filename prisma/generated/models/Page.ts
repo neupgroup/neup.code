@@ -199,8 +199,7 @@ export type PageWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Page"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Page"> | Date | string
   workspace?: Prisma.XOR<Prisma.WorkspaceScalarRelationFilter, Prisma.WorkspaceWhereInput>
-  blocks?: Prisma.PageBlockListRelationFilter
-  history?: Prisma.HistoryListRelationFilter
+  blocks?: Prisma.BlockListRelationFilter
 }
 
 export type PageOrderByWithRelationInput = {
@@ -212,8 +211,7 @@ export type PageOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   workspace?: Prisma.WorkspaceOrderByWithRelationInput
-  blocks?: Prisma.PageBlockOrderByRelationAggregateInput
-  history?: Prisma.HistoryOrderByRelationAggregateInput
+  blocks?: Prisma.BlockOrderByRelationAggregateInput
 }
 
 export type PageWhereUniqueInput = Prisma.AtLeast<{
@@ -228,8 +226,7 @@ export type PageWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Page"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Page"> | Date | string
   workspace?: Prisma.XOR<Prisma.WorkspaceScalarRelationFilter, Prisma.WorkspaceWhereInput>
-  blocks?: Prisma.PageBlockListRelationFilter
-  history?: Prisma.HistoryListRelationFilter
+  blocks?: Prisma.BlockListRelationFilter
 }, "id">
 
 export type PageOrderByWithAggregationInput = {
@@ -266,8 +263,7 @@ export type PageCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   workspace: Prisma.WorkspaceCreateNestedOneWithoutPagesInput
-  blocks?: Prisma.PageBlockCreateNestedManyWithoutPageInput
-  history?: Prisma.HistoryCreateNestedManyWithoutPageInput
+  blocks?: Prisma.BlockCreateNestedManyWithoutPageInput
 }
 
 export type PageUncheckedCreateInput = {
@@ -278,8 +274,7 @@ export type PageUncheckedCreateInput = {
   cover?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  blocks?: Prisma.PageBlockUncheckedCreateNestedManyWithoutPageInput
-  history?: Prisma.HistoryUncheckedCreateNestedManyWithoutPageInput
+  blocks?: Prisma.BlockUncheckedCreateNestedManyWithoutPageInput
 }
 
 export type PageUpdateInput = {
@@ -290,8 +285,7 @@ export type PageUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   workspace?: Prisma.WorkspaceUpdateOneRequiredWithoutPagesNestedInput
-  blocks?: Prisma.PageBlockUpdateManyWithoutPageNestedInput
-  history?: Prisma.HistoryUpdateManyWithoutPageNestedInput
+  blocks?: Prisma.BlockUpdateManyWithoutPageNestedInput
 }
 
 export type PageUncheckedUpdateInput = {
@@ -302,8 +296,7 @@ export type PageUncheckedUpdateInput = {
   cover?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  blocks?: Prisma.PageBlockUncheckedUpdateManyWithoutPageNestedInput
-  history?: Prisma.HistoryUncheckedUpdateManyWithoutPageNestedInput
+  blocks?: Prisma.BlockUncheckedUpdateManyWithoutPageNestedInput
 }
 
 export type PageCreateManyInput = {
@@ -426,6 +419,10 @@ export type NullableStringFieldUpdateOperationsInput = {
   set?: string | null
 }
 
+export type DateTimeFieldUpdateOperationsInput = {
+  set?: Date | string
+}
+
 export type PageCreateNestedOneWithoutBlocksInput = {
   create?: Prisma.XOR<Prisma.PageCreateWithoutBlocksInput, Prisma.PageUncheckedCreateWithoutBlocksInput>
   connectOrCreate?: Prisma.PageCreateOrConnectWithoutBlocksInput
@@ -440,20 +437,6 @@ export type PageUpdateOneRequiredWithoutBlocksNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.PageUpdateToOneWithWhereWithoutBlocksInput, Prisma.PageUpdateWithoutBlocksInput>, Prisma.PageUncheckedUpdateWithoutBlocksInput>
 }
 
-export type PageCreateNestedOneWithoutHistoryInput = {
-  create?: Prisma.XOR<Prisma.PageCreateWithoutHistoryInput, Prisma.PageUncheckedCreateWithoutHistoryInput>
-  connectOrCreate?: Prisma.PageCreateOrConnectWithoutHistoryInput
-  connect?: Prisma.PageWhereUniqueInput
-}
-
-export type PageUpdateOneRequiredWithoutHistoryNestedInput = {
-  create?: Prisma.XOR<Prisma.PageCreateWithoutHistoryInput, Prisma.PageUncheckedCreateWithoutHistoryInput>
-  connectOrCreate?: Prisma.PageCreateOrConnectWithoutHistoryInput
-  upsert?: Prisma.PageUpsertWithoutHistoryInput
-  connect?: Prisma.PageWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.PageUpdateToOneWithWhereWithoutHistoryInput, Prisma.PageUpdateWithoutHistoryInput>, Prisma.PageUncheckedUpdateWithoutHistoryInput>
-}
-
 export type PageCreateWithoutWorkspaceInput = {
   id: string
   title: string
@@ -461,8 +444,7 @@ export type PageCreateWithoutWorkspaceInput = {
   cover?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  blocks?: Prisma.PageBlockCreateNestedManyWithoutPageInput
-  history?: Prisma.HistoryCreateNestedManyWithoutPageInput
+  blocks?: Prisma.BlockCreateNestedManyWithoutPageInput
 }
 
 export type PageUncheckedCreateWithoutWorkspaceInput = {
@@ -472,8 +454,7 @@ export type PageUncheckedCreateWithoutWorkspaceInput = {
   cover?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  blocks?: Prisma.PageBlockUncheckedCreateNestedManyWithoutPageInput
-  history?: Prisma.HistoryUncheckedCreateNestedManyWithoutPageInput
+  blocks?: Prisma.BlockUncheckedCreateNestedManyWithoutPageInput
 }
 
 export type PageCreateOrConnectWithoutWorkspaceInput = {
@@ -523,7 +504,6 @@ export type PageCreateWithoutBlocksInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   workspace: Prisma.WorkspaceCreateNestedOneWithoutPagesInput
-  history?: Prisma.HistoryCreateNestedManyWithoutPageInput
 }
 
 export type PageUncheckedCreateWithoutBlocksInput = {
@@ -534,7 +514,6 @@ export type PageUncheckedCreateWithoutBlocksInput = {
   cover?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
-  history?: Prisma.HistoryUncheckedCreateNestedManyWithoutPageInput
 }
 
 export type PageCreateOrConnectWithoutBlocksInput = {
@@ -561,7 +540,6 @@ export type PageUpdateWithoutBlocksInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   workspace?: Prisma.WorkspaceUpdateOneRequiredWithoutPagesNestedInput
-  history?: Prisma.HistoryUpdateManyWithoutPageNestedInput
 }
 
 export type PageUncheckedUpdateWithoutBlocksInput = {
@@ -572,67 +550,6 @@ export type PageUncheckedUpdateWithoutBlocksInput = {
   cover?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  history?: Prisma.HistoryUncheckedUpdateManyWithoutPageNestedInput
-}
-
-export type PageCreateWithoutHistoryInput = {
-  id: string
-  title: string
-  icon?: string | null
-  cover?: string | null
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  workspace: Prisma.WorkspaceCreateNestedOneWithoutPagesInput
-  blocks?: Prisma.PageBlockCreateNestedManyWithoutPageInput
-}
-
-export type PageUncheckedCreateWithoutHistoryInput = {
-  id: string
-  workspaceId: string
-  title: string
-  icon?: string | null
-  cover?: string | null
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  blocks?: Prisma.PageBlockUncheckedCreateNestedManyWithoutPageInput
-}
-
-export type PageCreateOrConnectWithoutHistoryInput = {
-  where: Prisma.PageWhereUniqueInput
-  create: Prisma.XOR<Prisma.PageCreateWithoutHistoryInput, Prisma.PageUncheckedCreateWithoutHistoryInput>
-}
-
-export type PageUpsertWithoutHistoryInput = {
-  update: Prisma.XOR<Prisma.PageUpdateWithoutHistoryInput, Prisma.PageUncheckedUpdateWithoutHistoryInput>
-  create: Prisma.XOR<Prisma.PageCreateWithoutHistoryInput, Prisma.PageUncheckedCreateWithoutHistoryInput>
-  where?: Prisma.PageWhereInput
-}
-
-export type PageUpdateToOneWithWhereWithoutHistoryInput = {
-  where?: Prisma.PageWhereInput
-  data: Prisma.XOR<Prisma.PageUpdateWithoutHistoryInput, Prisma.PageUncheckedUpdateWithoutHistoryInput>
-}
-
-export type PageUpdateWithoutHistoryInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  title?: Prisma.StringFieldUpdateOperationsInput | string
-  icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  cover?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  workspace?: Prisma.WorkspaceUpdateOneRequiredWithoutPagesNestedInput
-  blocks?: Prisma.PageBlockUpdateManyWithoutPageNestedInput
-}
-
-export type PageUncheckedUpdateWithoutHistoryInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  workspaceId?: Prisma.StringFieldUpdateOperationsInput | string
-  title?: Prisma.StringFieldUpdateOperationsInput | string
-  icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  cover?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  blocks?: Prisma.PageBlockUncheckedUpdateManyWithoutPageNestedInput
 }
 
 export type PageCreateManyWorkspaceInput = {
@@ -651,8 +568,7 @@ export type PageUpdateWithoutWorkspaceInput = {
   cover?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  blocks?: Prisma.PageBlockUpdateManyWithoutPageNestedInput
-  history?: Prisma.HistoryUpdateManyWithoutPageNestedInput
+  blocks?: Prisma.BlockUpdateManyWithoutPageNestedInput
 }
 
 export type PageUncheckedUpdateWithoutWorkspaceInput = {
@@ -662,8 +578,7 @@ export type PageUncheckedUpdateWithoutWorkspaceInput = {
   cover?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  blocks?: Prisma.PageBlockUncheckedUpdateManyWithoutPageNestedInput
-  history?: Prisma.HistoryUncheckedUpdateManyWithoutPageNestedInput
+  blocks?: Prisma.BlockUncheckedUpdateManyWithoutPageNestedInput
 }
 
 export type PageUncheckedUpdateManyWithoutWorkspaceInput = {
@@ -682,12 +597,10 @@ export type PageUncheckedUpdateManyWithoutWorkspaceInput = {
 
 export type PageCountOutputType = {
   blocks: number
-  history: number
 }
 
 export type PageCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   blocks?: boolean | PageCountOutputTypeCountBlocksArgs
-  history?: boolean | PageCountOutputTypeCountHistoryArgs
 }
 
 /**
@@ -704,14 +617,7 @@ export type PageCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensi
  * PageCountOutputType without action
  */
 export type PageCountOutputTypeCountBlocksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.PageBlockWhereInput
-}
-
-/**
- * PageCountOutputType without action
- */
-export type PageCountOutputTypeCountHistoryArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.HistoryWhereInput
+  where?: Prisma.BlockWhereInput
 }
 
 
@@ -725,7 +631,6 @@ export type PageSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   updatedAt?: boolean
   workspace?: boolean | Prisma.WorkspaceDefaultArgs<ExtArgs>
   blocks?: boolean | Prisma.Page$blocksArgs<ExtArgs>
-  history?: boolean | Prisma.Page$historyArgs<ExtArgs>
   _count?: boolean | Prisma.PageCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["page"]>
 
@@ -765,7 +670,6 @@ export type PageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = run
 export type PageInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   workspace?: boolean | Prisma.WorkspaceDefaultArgs<ExtArgs>
   blocks?: boolean | Prisma.Page$blocksArgs<ExtArgs>
-  history?: boolean | Prisma.Page$historyArgs<ExtArgs>
   _count?: boolean | Prisma.PageCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type PageIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -779,8 +683,7 @@ export type $PagePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   name: "Page"
   objects: {
     workspace: Prisma.$WorkspacePayload<ExtArgs>
-    blocks: Prisma.$PageBlockPayload<ExtArgs>[]
-    history: Prisma.$HistoryPayload<ExtArgs>[]
+    blocks: Prisma.$BlockPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1185,8 +1088,7 @@ readonly fields: PageFieldRefs;
 export interface Prisma__PageClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   workspace<T extends Prisma.WorkspaceDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.WorkspaceDefaultArgs<ExtArgs>>): Prisma.Prisma__WorkspaceClient<runtime.Types.Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
-  blocks<T extends Prisma.Page$blocksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Page$blocksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PageBlockPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  history<T extends Prisma.Page$historyArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Page$historyArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$HistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  blocks<T extends Prisma.Page$blocksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Page$blocksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$BlockPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1628,47 +1530,23 @@ export type PageDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Internal
  */
 export type Page$blocksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
-   * Select specific fields to fetch from the PageBlock
+   * Select specific fields to fetch from the Block
    */
-  select?: Prisma.PageBlockSelect<ExtArgs> | null
+  select?: Prisma.BlockSelect<ExtArgs> | null
   /**
-   * Omit specific fields from the PageBlock
+   * Omit specific fields from the Block
    */
-  omit?: Prisma.PageBlockOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.PageBlockInclude<ExtArgs> | null
-  where?: Prisma.PageBlockWhereInput
-  orderBy?: Prisma.PageBlockOrderByWithRelationInput | Prisma.PageBlockOrderByWithRelationInput[]
-  cursor?: Prisma.PageBlockWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.PageBlockScalarFieldEnum | Prisma.PageBlockScalarFieldEnum[]
-}
-
-/**
- * Page.history
- */
-export type Page$historyArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the History
-   */
-  select?: Prisma.HistorySelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the History
-   */
-  omit?: Prisma.HistoryOmit<ExtArgs> | null
+  omit?: Prisma.BlockOmit<ExtArgs> | null
   /**
    * Choose, which related nodes to fetch as well
    */
-  include?: Prisma.HistoryInclude<ExtArgs> | null
-  where?: Prisma.HistoryWhereInput
-  orderBy?: Prisma.HistoryOrderByWithRelationInput | Prisma.HistoryOrderByWithRelationInput[]
-  cursor?: Prisma.HistoryWhereUniqueInput
+  include?: Prisma.BlockInclude<ExtArgs> | null
+  where?: Prisma.BlockWhereInput
+  orderBy?: Prisma.BlockOrderByWithRelationInput | Prisma.BlockOrderByWithRelationInput[]
+  cursor?: Prisma.BlockWhereUniqueInput
   take?: number
   skip?: number
-  distinct?: Prisma.HistoryScalarFieldEnum | Prisma.HistoryScalarFieldEnum[]
+  distinct?: Prisma.BlockScalarFieldEnum | Prisma.BlockScalarFieldEnum[]
 }
 
 /**

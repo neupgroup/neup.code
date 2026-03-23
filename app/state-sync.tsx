@@ -2,11 +2,18 @@
 
 import { useEffect, useRef } from "react";
 import {
-  loadWorkspaces,
-  saveWorkspaces,
-  WORKSPACE_STORAGE_EVENT,
-} from "./workspace/workspace-storage";
-import { BRIDGE_STORAGE_EVENT, loadBridges, saveBridges } from "./bridge/bridge-storage";
+  BRIDGE_STORAGE_EVENT,
+  loadBridges,
+  saveBridges,
+  type BridgeItem,
+} from "./bridge/bridge-storage";
+import {
+  loadPinnedPages,
+  PINNED_PAGES_STORAGE_EVENT,
+  savePinnedPages,
+  type PinnedPagesOrderBy,
+  type WorkspacePinnedPages,
+} from "./pinned-pages-storage";
 import {
   loadWorkspacePageBlocksFor,
   saveWorkspacePageBlocks,
@@ -14,21 +21,19 @@ import {
   type WorkspacePageBlock,
   type WorkspacePageBlockKind,
 } from "./page-blocks-storage";
-import type { WorkspaceItem } from "./workspace/workspace-storage";
-import type { BridgeItem } from "./bridge/bridge-storage";
+import {
+  loadWorkspaces,
+  saveWorkspaces,
+  WORKSPACE_STORAGE_EVENT,
+  type WorkspaceItem,
+} from "./workspace/workspace-storage";
 
 const VARIABLES_STORAGE_KEY = "neup.code.variables";
 const FLUSH_DELAY_MS = 5000;
 
 type SyncWorkspace = {
   id: string;
-  name: string;
   permit: string;
-  description: string;
-  sharedWith: string[];
-  isHidden?: boolean;
-  isDefault?: boolean;
-  createdAt: string;
 };
 
 type SyncPage = {
@@ -43,7 +48,7 @@ type SyncPage = {
 type SyncBlock = {
   id: string;
   pageId: string;
-  kind: WorkspacePageBlockKind | "api" | "webhook" | "grpc";
+  type: WorkspacePageBlockKind | "api" | "webhook" | "grpc";
   content: string;
   position: number;
   createdAt: string;
@@ -68,29 +73,31 @@ type SyncBridge = {
   createdAt: string;
 };
 
-type SyncPayloadV2 = {
-  version: 2;
+type SyncPinnedPages = {
+  id: string;
+  workspaceId: string;
+  pageIds: string[];
+  orderBy: PinnedPagesOrderBy;
+};
+
+type SyncPayloadV3 = {
+  version: 3;
   fullSync: boolean;
   bufferedAt: string;
   workspaces: SyncWorkspace[];
   pages: SyncPage[];
   blocks: SyncBlock[];
   bridges: SyncBridge[];
+  pinnedPages: SyncPinnedPages[];
 };
 
 type ServerSnapshot = {
   ok: true;
+  accountId: string;
   workspaces: Array<{
     id: string;
     accountId: string;
-    name: string;
     permit: string;
-    description: string;
-    sharedWith: string[];
-    isHidden: boolean;
-    isDefault: boolean;
-    createdAt: string;
-    updatedAt: string;
   }>;
   pages: Array<{
     id: string;
@@ -104,7 +111,7 @@ type ServerSnapshot = {
   blocks: Array<{
     id: string;
     pageId: string;
-    kind: string;
+    type: string;
     content: string;
     position: number;
     createdAt: string;
@@ -129,10 +136,25 @@ type ServerSnapshot = {
     createdAt: string;
     updatedAt: string;
   }>;
+  pinnedPages: Array<{
+    id: string;
+    workspaceId: string;
+    pageIds: string[];
+    orderBy: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };
 
 const BRIDGE_ENVIRONMENTS = ["development", "staging", "production"] as const;
 const BRIDGE_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+const PINNED_PAGES_ORDER_BY_VALUES = [
+  "ascending.title",
+  "descending.title",
+  "ascending.date",
+  "descending.date",
+  "custom",
+] as const;
 
 function normalizeBridgeEnvironment(value: string | null | undefined): BridgeItem["environment"] {
   if (value && BRIDGE_ENVIRONMENTS.includes(value as BridgeItem["environment"])) {
@@ -153,11 +175,19 @@ function normalizeBridgeMethod(
   return fallback;
 }
 
+function normalizePinnedPagesOrderBy(value: string | null | undefined): PinnedPagesOrderBy {
+  if (value && PINNED_PAGES_ORDER_BY_VALUES.includes(value as PinnedPagesOrderBy)) {
+    return value as PinnedPagesOrderBy;
+  }
+
+  return "custom";
+}
+
 function getDefaultWorkspaceId(workspaces: WorkspaceItem[]) {
   return workspaces.find((ws) => ws.isDefault)?.id ?? workspaces[0]?.id ?? null;
 }
 
-function getBlockKindForBridge(item: BridgeItem): "api" | "webhook" | "grpc" {
+function getBlockTypeForBridge(item: BridgeItem): "api" | "webhook" | "grpc" {
   if (item.bridgeType === "webhook") return "webhook";
   if (item.bridgeType === "grpc") return "grpc";
   return "api";
@@ -167,7 +197,7 @@ function isSystemBridgePageId(id: string) {
   return id === "sys-bridge" || id.startsWith("sys-bridge-");
 }
 
-function buildPayloadFromLocal(): SyncPayloadV2 | null {
+function buildPayloadFromLocal(): SyncPayloadV3 | null {
   const workspaces = loadWorkspaces();
   const defaultWorkspaceId = getDefaultWorkspaceId(workspaces);
   if (!defaultWorkspaceId) return null;
@@ -177,13 +207,7 @@ function buildPayloadFromLocal(): SyncPayloadV2 | null {
 
   const workspacePayload: SyncWorkspace[] = workspaces.map((ws) => ({
     id: ws.id,
-    name: ws.name,
     permit: "owner",
-    description: ws.description ?? "",
-    sharedWith: ws.sharedWith ?? [],
-    isHidden: Boolean(ws.isHidden),
-    isDefault: Boolean(ws.isDefault),
-    createdAt: ws.createdAt ?? bufferedAt,
   }));
 
   const pages: SyncPage[] = bridges
@@ -208,7 +232,6 @@ function buildPayloadFromLocal(): SyncPayloadV2 | null {
   });
 
   const blocks: SyncBlock[] = [];
-
   const childrenByPage = new Map<string, BridgeItem[]>();
   for (const item of bridges) {
     if (!item.parentChapterId) continue;
@@ -222,22 +245,25 @@ function buildPayloadFromLocal(): SyncPayloadV2 | null {
     const items = childrenByPage.get(page.id) ?? [];
     items.forEach((item, index) => {
       const entryKind = item.entryKind ?? "bridge";
-      const kind: SyncBlock["kind"] =
-        entryKind === "note" || entryKind === "heading1" || entryKind === "heading2" || entryKind === "heading3"
+      const type: SyncBlock["type"] =
+        entryKind === "note" ||
+        entryKind === "heading1" ||
+        entryKind === "heading2" ||
+        entryKind === "heading3"
           ? entryKind
           : entryKind === "chapter"
             ? "chapter"
-            : getBlockKindForBridge(item);
+            : getBlockTypeForBridge(item);
 
       const content =
-        kind === "note" || kind === "heading1" || kind === "heading2" || kind === "heading3"
+        type === "note" || type === "heading1" || type === "heading2" || type === "heading3"
           ? item.publicNote ?? item.notes ?? ""
           : item.id;
 
       blocks.push({
         id: item.id,
         pageId: page.id,
-        kind,
+        type,
         content,
         position: index,
         createdAt: item.createdAt ?? bufferedAt,
@@ -250,7 +276,7 @@ function buildPayloadFromLocal(): SyncPayloadV2 | null {
     blocks.push({
       id: block.id,
       pageId: rootPageId,
-      kind: block.kind,
+      type: block.kind,
       content: block.content,
       position: index,
       createdAt: block.createdAt ?? bufferedAt,
@@ -278,14 +304,24 @@ function buildPayloadFromLocal(): SyncPayloadV2 | null {
       createdAt: item.createdAt ?? bufferedAt,
     }));
 
+  const pinnedPages: SyncPinnedPages[] = loadPinnedPages()
+    .filter((item) => workspaces.some((workspace) => workspace.id === item.workspaceId))
+    .map((item) => ({
+      id: item.id,
+      workspaceId: item.workspaceId,
+      pageIds: item.pageIds,
+      orderBy: item.orderBy,
+    }));
+
   return {
-    version: 2,
+    version: 3,
     fullSync: true,
     bufferedAt,
     workspaces: workspacePayload,
     pages,
     blocks,
     bridges: bridgeResources,
+    pinnedPages,
   };
 }
 
@@ -293,7 +329,8 @@ function hasAnyUserData() {
   const workspaces = loadWorkspaces();
   const bridges = loadBridges();
   const rootBlocks = loadWorkspacePageBlocksFor("bridge");
-  return workspaces.length > 0 || bridges.length > 0 || rootBlocks.length > 0;
+  const pinnedPages = loadPinnedPages();
+  return workspaces.length > 0 || bridges.length > 0 || rootBlocks.length > 0 || pinnedPages.length > 0;
 }
 
 function safeParseJson(raw: string): unknown {
@@ -308,14 +345,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isPayloadV2(value: unknown): value is SyncPayloadV2 {
+function isPayloadV3(value: unknown): value is SyncPayloadV3 {
   if (!isRecord(value)) return false;
-  if (value.version !== 2) return false;
+  if (value.version !== 3) return false;
   if (typeof value.fullSync !== "boolean") return false;
   if (!Array.isArray(value.workspaces)) return false;
   if (!Array.isArray(value.pages)) return false;
   if (!Array.isArray(value.blocks)) return false;
   if (!Array.isArray(value.bridges)) return false;
+  if (!Array.isArray(value.pinnedPages)) return false;
   if (typeof value.bufferedAt !== "string") return false;
   return true;
 }
@@ -327,16 +365,29 @@ function toTextEntryName(kind: "note" | "heading1" | "heading2" | "heading3") {
   return "Heading 3";
 }
 
+function buildFallbackWorkspaceName(id: string, index: number) {
+  const suffix = id.slice(0, 8) || String(index + 1);
+  return `Workspace ${suffix}`;
+}
+
 function applyServerSnapshot(snapshot: ServerSnapshot) {
-  const workspaceItems: WorkspaceItem[] = snapshot.workspaces.map((ws) => ({
-    id: ws.id,
-    name: ws.name,
-    description: ws.description ?? "",
-    createdAt: ws.createdAt,
-    sharedWith: ws.sharedWith ?? [],
-    isHidden: ws.isHidden,
-    isDefault: ws.isDefault,
-  }));
+  const existingWorkspaces = new Map(loadWorkspaces().map((workspace) => [workspace.id, workspace]));
+  const workspaceItems: WorkspaceItem[] = snapshot.workspaces.map((ws, index) => {
+    const existing = existingWorkspaces.get(ws.id);
+    return {
+      id: ws.id,
+      name: existing?.name ?? buildFallbackWorkspaceName(ws.id, index),
+      description: existing?.description ?? "",
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      sharedWith: existing?.sharedWith ?? [],
+      isHidden: existing?.isHidden ?? false,
+      isDefault: existing?.isDefault ?? index === 0,
+    };
+  });
+
+  if (workspaceItems.length && !workspaceItems.some((workspace) => workspace.isDefault)) {
+    workspaceItems[0] = { ...workspaceItems[0], isDefault: true };
+  }
   saveWorkspaces(workspaceItems);
 
   const rootPage = snapshot.pages.find((page) => isSystemBridgePageId(page.id));
@@ -347,7 +398,7 @@ function applyServerSnapshot(snapshot: ServerSnapshot) {
       .map((block) => ({
         id: block.id,
         pageKey: "bridge",
-        kind: block.kind as WorkspacePageBlockKind,
+        kind: block.type as WorkspacePageBlockKind,
         content: block.content ?? "",
         createdAt: block.createdAt ?? "0",
       })) satisfies WorkspacePageBlock[];
@@ -370,13 +421,12 @@ function applyServerSnapshot(snapshot: ServerSnapshot) {
 
   const childPageIds = new Set<string>();
   for (const block of snapshot.blocks) {
-    if (block.kind === "chapter" && block.content) {
+    if (block.type === "chapter" && block.content) {
       childPageIds.add(block.content);
     }
   }
 
   const bridgeById = new Map(snapshot.bridges.map((bridge) => [bridge.id, bridge]));
-
   const chapterItemsById = new Map<string, BridgeItem>();
   for (const page of pages) {
     chapterItemsById.set(page.id, {
@@ -396,14 +446,13 @@ function applyServerSnapshot(snapshot: ServerSnapshot) {
   const parentByChildPage = new Map<string, string>();
   for (const [pageId, list] of blocksByPage) {
     for (const block of list) {
-      if (block.kind === "chapter" && block.content) {
+      if (block.type === "chapter" && block.content) {
         parentByChildPage.set(block.content, pageId);
       }
     }
   }
   for (const [pageId, item] of chapterItemsById) {
-    const parent = parentByChildPage.get(pageId) ?? null;
-    item.parentChapterId = parent;
+    item.parentChapterId = parentByChildPage.get(pageId) ?? null;
     chapterItemsById.set(pageId, item);
   }
 
@@ -420,21 +469,21 @@ function applyServerSnapshot(snapshot: ServerSnapshot) {
 
     const blocks = blocksByPage.get(pageId) ?? [];
     for (const block of blocks) {
-      if (block.kind === "chapter" && block.content) {
+      if (block.type === "chapter" && block.content) {
         appendPage(block.content);
         continue;
       }
 
       if (
-        block.kind === "note" ||
-        block.kind === "heading1" ||
-        block.kind === "heading2" ||
-        block.kind === "heading3"
+        block.type === "note" ||
+        block.type === "heading1" ||
+        block.type === "heading2" ||
+        block.type === "heading3"
       ) {
         nextBridges.push({
           id: block.id,
-          name: toTextEntryName(block.kind),
-          entryKind: block.kind,
+          name: toTextEntryName(block.type),
+          entryKind: block.type,
           parentChapterId: pageId,
           bridgeType: "api",
           endpoint: "",
@@ -445,25 +494,25 @@ function applyServerSnapshot(snapshot: ServerSnapshot) {
         continue;
       }
 
-      if (block.kind === "api" || block.kind === "webhook" || block.kind === "grpc") {
+      if (block.type === "api" || block.type === "webhook" || block.type === "grpc") {
         const bridge = bridgeById.get(block.id);
         nextBridges.push({
           id: block.id,
           name: bridge?.name ?? "",
           entryKind: "bridge",
           parentChapterId: pageId,
-          bridgeType: block.kind,
+          bridgeType: block.type,
           endpoint: bridge?.endpoint ?? "",
           environment: normalizeBridgeEnvironment(bridge?.environment),
-          method: normalizeBridgeMethod(bridge?.method, block.kind === "api" ? "GET" : undefined),
-          apiConfig: (bridge as any)?.apiConfig,
-          requiredFields: (bridge as any)?.requiredFields,
-          serviceName: (bridge as any)?.serviceName ?? undefined,
-          secret: (bridge as any)?.secret ?? undefined,
-          isPrivateInternal: Boolean((bridge as any)?.isPrivateInternal),
-          privateNote: (bridge as any)?.privateNote ?? undefined,
-          publicNote: (bridge as any)?.publicNote ?? undefined,
-          notes: (bridge as any)?.notes ?? undefined,
+          method: normalizeBridgeMethod(bridge?.method, block.type === "api" ? "GET" : undefined),
+          apiConfig: bridge?.apiConfig as BridgeItem["apiConfig"] | undefined,
+          requiredFields: bridge?.requiredFields as BridgeItem["requiredFields"] | undefined,
+          serviceName: bridge?.serviceName ?? undefined,
+          secret: bridge?.secret ?? undefined,
+          isPrivateInternal: Boolean(bridge?.isPrivateInternal),
+          privateNote: bridge?.privateNote ?? undefined,
+          publicNote: bridge?.publicNote ?? undefined,
+          notes: bridge?.notes ?? undefined,
           createdAt: bridge?.createdAt ?? block.createdAt ?? new Date().toISOString(),
           workspaceId: bridge?.workspaceId ?? pageItem.workspaceId,
         });
@@ -479,28 +528,42 @@ function applyServerSnapshot(snapshot: ServerSnapshot) {
     appendPage(page.id);
   }
 
-  // Ensure we don't drop any pages that are present but only referenced in unusual ways.
   for (const page of pages) {
     appendPage(page.id);
   }
 
   saveBridges(nextBridges);
+
+  const validPagesByWorkspace = Object.fromEntries(
+    snapshot.pages.map((page) => [page.workspaceId, [] as string[]]),
+  ) as Record<string, string[]>;
+  for (const page of pages) {
+    const list = validPagesByWorkspace[page.workspaceId] ?? [];
+    list.push(page.id);
+    validPagesByWorkspace[page.workspaceId] = list;
+  }
+
+  const nextPinnedPages: WorkspacePinnedPages[] = snapshot.pinnedPages
+    .filter((item) => snapshot.workspaces.some((workspace) => workspace.id === item.workspaceId))
+    .map((item) => ({
+      id: item.id,
+      workspaceId: item.workspaceId,
+      pageIds: item.pageIds.filter((pageId) =>
+        (validPagesByWorkspace[item.workspaceId] ?? []).includes(pageId),
+      ),
+      orderBy: normalizePinnedPagesOrderBy(item.orderBy),
+    }));
+  savePinnedPages(nextPinnedPages);
 }
 
-function payloadToSnapshotLike(payload: SyncPayloadV2): ServerSnapshot {
+function payloadToSnapshotLike(payload: SyncPayloadV3): ServerSnapshot {
   return {
     ok: true,
-    workspaces: payload.workspaces.map((ws) => ({
-      id: ws.id,
+    accountId: "local",
+    workspaces: payload.workspaces.map((workspace) => ({
+      id: workspace.id,
       accountId: "local",
-      name: ws.name,
-      permit: ws.permit,
-      description: ws.description,
-      sharedWith: ws.sharedWith,
-      isHidden: Boolean(ws.isHidden),
-      isDefault: Boolean(ws.isDefault),
-      createdAt: ws.createdAt,
-      updatedAt: ws.createdAt,
+      permit: workspace.permit,
     })),
     pages: payload.pages.map((page) => ({
       id: page.id,
@@ -514,7 +577,7 @@ function payloadToSnapshotLike(payload: SyncPayloadV2): ServerSnapshot {
     blocks: payload.blocks.map((block) => ({
       id: block.id,
       pageId: block.pageId,
-      kind: block.kind,
+      type: block.type,
       content: block.content,
       position: block.position,
       createdAt: block.createdAt,
@@ -538,6 +601,14 @@ function payloadToSnapshotLike(payload: SyncPayloadV2): ServerSnapshot {
       notes: bridge.notes,
       createdAt: bridge.createdAt,
       updatedAt: bridge.createdAt,
+    })),
+    pinnedPages: payload.pinnedPages.map((item) => ({
+      id: item.id,
+      workspaceId: item.workspaceId,
+      pageIds: item.pageIds,
+      orderBy: item.orderBy,
+      createdAt: payload.bufferedAt,
+      updatedAt: payload.bufferedAt,
     })),
   };
 }
@@ -583,7 +654,7 @@ export function StateSync() {
     if (!raw) return;
 
     const parsed = safeParseJson(raw);
-    if (!isPayloadV2(parsed)) return;
+    if (!isPayloadV3(parsed)) return;
 
     flushInFlightRef.current = true;
     try {
@@ -646,7 +717,7 @@ export function StateSync() {
 
       const bufferedRaw = window.localStorage.getItem(VARIABLES_STORAGE_KEY);
       const bufferedParsed = bufferedRaw ? safeParseJson(bufferedRaw) : null;
-      const bufferedPayload = isPayloadV2(bufferedParsed) ? bufferedParsed : null;
+      const bufferedPayload = isPayloadV3(bufferedParsed) ? bufferedParsed : null;
 
       try {
         const response = await fetch("/api/state", { method: "GET", cache: "no-store" });
@@ -674,7 +745,6 @@ export function StateSync() {
         // Ignore bootstrap errors; we'll still seed server if needed.
       }
 
-      // No server state found (or API unreachable). If we have any local data, buffer it and attempt a flush.
       if (hasAnyUserData()) {
         bufferLatestState();
         scheduleFlush();
@@ -699,12 +769,14 @@ export function StateSync() {
     window.addEventListener(WORKSPACE_STORAGE_EVENT, handleLocalChange);
     window.addEventListener(BRIDGE_STORAGE_EVENT, handleLocalChange);
     window.addEventListener(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT, handleLocalChange);
+    window.addEventListener(PINNED_PAGES_STORAGE_EVENT, handleLocalChange);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.removeEventListener(WORKSPACE_STORAGE_EVENT, handleLocalChange);
       window.removeEventListener(BRIDGE_STORAGE_EVENT, handleLocalChange);
       window.removeEventListener(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT, handleLocalChange);
+      window.removeEventListener(PINNED_PAGES_STORAGE_EVENT, handleLocalChange);
       document.removeEventListener("visibilitychange", onVisibilityChange);
 
       if (flushTimeoutRef.current) {

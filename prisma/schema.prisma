@@ -16,22 +16,16 @@ model Account {
   id         String      @id @map("id")
   workspaces Workspace[]
 
-  @@map("accounts")
+  @@map("account")
 }
 
 model Workspace {
   id          String          @id @map("id")
   accountId   String          @map("account_id")
-  name        String          @map("name")
   permit      String          @default("owner") @map("permit")
-  description String          @default("") @map("description")
-  sharedWith  String[]        @default([]) @map("shared_with")
-  isHidden    Boolean         @default(false) @map("is_hidden")
-  isDefault   Boolean         @default(false) @map("is_default")
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
   account     Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
   pages       Page[]
+  pinnedPages PinnedPages?
   bridges     BridgeResource[]
 
   @@index([accountId])
@@ -47,26 +41,38 @@ model Page {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  blocks      PageBlock[]
-  history     History[]
+  blocks      Block[]
 
   @@index([workspaceId])
-  @@map("pages")
+  @@map("page")
 }
 
-model PageBlock {
+model Block {
   id        String   @id @map("id")
   pageId    String   @map("page_id")
-  kind      String   @map("kind")
+  type      String   @map("type")
   content   String   @default("") @map("content")
-  position  Int      @map("position")
+  position  Int      @default(0) @map("position")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@index([pageId])
   @@index([pageId, position])
-  @@map("page_blocks")
+  @@map("block")
+}
+
+model PinnedPages {
+  id         String    @id @map("id")
+  workspaceId String   @unique @map("workspace_id")
+  pageIds    Json      @map("page_ids")
+  orderBy    String    @default("custom") @map("order_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("pinned_pages")
 }
 
 model BridgeResource {
@@ -91,17 +97,4 @@ model BridgeResource {
 
   @@index([workspaceId])
   @@map("bridges")
-}
-
-model History {
-  id        String   @id @map("id")
-  pageId    String   @map("page_id")
-  timestamp DateTime @default(now()) @map("timestamp")
-  changes   Json     @map("changes")
-  by        String   @map("by")
-  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
-
-  @@index([pageId])
-  @@index([by])
-  @@map("history")
 }

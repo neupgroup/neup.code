@@ -387,9 +387,9 @@ export const ModelName = {
   Account: 'Account',
   Workspace: 'Workspace',
   Page: 'Page',
-  PageBlock: 'PageBlock',
-  BridgeResource: 'BridgeResource',
-  History: 'History'
+  Block: 'Block',
+  PinnedPages: 'PinnedPages',
+  BridgeResource: 'BridgeResource'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -405,7 +405,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "account" | "workspace" | "page" | "pageBlock" | "bridgeResource" | "history"
+    modelProps: "account" | "workspace" | "page" | "block" | "pinnedPages" | "bridgeResource"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -631,77 +631,151 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
-    PageBlock: {
-      payload: Prisma.$PageBlockPayload<ExtArgs>
-      fields: Prisma.PageBlockFieldRefs
+    Block: {
+      payload: Prisma.$BlockPayload<ExtArgs>
+      fields: Prisma.BlockFieldRefs
       operations: {
         findUnique: {
-          args: Prisma.PageBlockFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload> | null
+          args: Prisma.BlockFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload> | null
         }
         findUniqueOrThrow: {
-          args: Prisma.PageBlockFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>
+          args: Prisma.BlockFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>
         }
         findFirst: {
-          args: Prisma.PageBlockFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload> | null
+          args: Prisma.BlockFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload> | null
         }
         findFirstOrThrow: {
-          args: Prisma.PageBlockFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>
+          args: Prisma.BlockFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>
         }
         findMany: {
-          args: Prisma.PageBlockFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>[]
+          args: Prisma.BlockFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>[]
         }
         create: {
-          args: Prisma.PageBlockCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>
+          args: Prisma.BlockCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>
         }
         createMany: {
-          args: Prisma.PageBlockCreateManyArgs<ExtArgs>
+          args: Prisma.BlockCreateManyArgs<ExtArgs>
           result: BatchPayload
         }
         createManyAndReturn: {
-          args: Prisma.PageBlockCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>[]
+          args: Prisma.BlockCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>[]
         }
         delete: {
-          args: Prisma.PageBlockDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>
+          args: Prisma.BlockDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>
         }
         update: {
-          args: Prisma.PageBlockUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>
+          args: Prisma.BlockUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>
         }
         deleteMany: {
-          args: Prisma.PageBlockDeleteManyArgs<ExtArgs>
+          args: Prisma.BlockDeleteManyArgs<ExtArgs>
           result: BatchPayload
         }
         updateMany: {
-          args: Prisma.PageBlockUpdateManyArgs<ExtArgs>
+          args: Prisma.BlockUpdateManyArgs<ExtArgs>
           result: BatchPayload
         }
         updateManyAndReturn: {
-          args: Prisma.PageBlockUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>[]
+          args: Prisma.BlockUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>[]
         }
         upsert: {
-          args: Prisma.PageBlockUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PageBlockPayload>
+          args: Prisma.BlockUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$BlockPayload>
         }
         aggregate: {
-          args: Prisma.PageBlockAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregatePageBlock>
+          args: Prisma.BlockAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateBlock>
         }
         groupBy: {
-          args: Prisma.PageBlockGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.PageBlockGroupByOutputType>[]
+          args: Prisma.BlockGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.BlockGroupByOutputType>[]
         }
         count: {
-          args: Prisma.PageBlockCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.PageBlockCountAggregateOutputType> | number
+          args: Prisma.BlockCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.BlockCountAggregateOutputType> | number
+        }
+      }
+    }
+    PinnedPages: {
+      payload: Prisma.$PinnedPagesPayload<ExtArgs>
+      fields: Prisma.PinnedPagesFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PinnedPagesFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PinnedPagesFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>
+        }
+        findFirst: {
+          args: Prisma.PinnedPagesFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PinnedPagesFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>
+        }
+        findMany: {
+          args: Prisma.PinnedPagesFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>[]
+        }
+        create: {
+          args: Prisma.PinnedPagesCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>
+        }
+        createMany: {
+          args: Prisma.PinnedPagesCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PinnedPagesCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>[]
+        }
+        delete: {
+          args: Prisma.PinnedPagesDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>
+        }
+        update: {
+          args: Prisma.PinnedPagesUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>
+        }
+        deleteMany: {
+          args: Prisma.PinnedPagesDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PinnedPagesUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PinnedPagesUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>[]
+        }
+        upsert: {
+          args: Prisma.PinnedPagesUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PinnedPagesPayload>
+        }
+        aggregate: {
+          args: Prisma.PinnedPagesAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePinnedPages>
+        }
+        groupBy: {
+          args: Prisma.PinnedPagesGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PinnedPagesGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PinnedPagesCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PinnedPagesCountAggregateOutputType> | number
         }
       }
     }
@@ -779,80 +853,6 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
-    History: {
-      payload: Prisma.$HistoryPayload<ExtArgs>
-      fields: Prisma.HistoryFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.HistoryFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.HistoryFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>
-        }
-        findFirst: {
-          args: Prisma.HistoryFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.HistoryFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>
-        }
-        findMany: {
-          args: Prisma.HistoryFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>[]
-        }
-        create: {
-          args: Prisma.HistoryCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>
-        }
-        createMany: {
-          args: Prisma.HistoryCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.HistoryCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>[]
-        }
-        delete: {
-          args: Prisma.HistoryDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>
-        }
-        update: {
-          args: Prisma.HistoryUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>
-        }
-        deleteMany: {
-          args: Prisma.HistoryDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.HistoryUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.HistoryUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>[]
-        }
-        upsert: {
-          args: Prisma.HistoryUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$HistoryPayload>
-        }
-        aggregate: {
-          args: Prisma.HistoryAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateHistory>
-        }
-        groupBy: {
-          args: Prisma.HistoryGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.HistoryGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.HistoryCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.HistoryCountAggregateOutputType> | number
-        }
-      }
-    }
   }
 } & {
   other: {
@@ -902,14 +902,7 @@ export type AccountScalarFieldEnum = (typeof AccountScalarFieldEnum)[keyof typeo
 export const WorkspaceScalarFieldEnum = {
   id: 'id',
   accountId: 'accountId',
-  name: 'name',
-  permit: 'permit',
-  description: 'description',
-  sharedWith: 'sharedWith',
-  isHidden: 'isHidden',
-  isDefault: 'isDefault',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  permit: 'permit'
 } as const
 
 export type WorkspaceScalarFieldEnum = (typeof WorkspaceScalarFieldEnum)[keyof typeof WorkspaceScalarFieldEnum]
@@ -928,17 +921,29 @@ export const PageScalarFieldEnum = {
 export type PageScalarFieldEnum = (typeof PageScalarFieldEnum)[keyof typeof PageScalarFieldEnum]
 
 
-export const PageBlockScalarFieldEnum = {
+export const BlockScalarFieldEnum = {
   id: 'id',
   pageId: 'pageId',
-  kind: 'kind',
+  type: 'type',
   content: 'content',
   position: 'position',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
-export type PageBlockScalarFieldEnum = (typeof PageBlockScalarFieldEnum)[keyof typeof PageBlockScalarFieldEnum]
+export type BlockScalarFieldEnum = (typeof BlockScalarFieldEnum)[keyof typeof BlockScalarFieldEnum]
+
+
+export const PinnedPagesScalarFieldEnum = {
+  id: 'id',
+  workspaceId: 'workspaceId',
+  pageIds: 'pageIds',
+  orderBy: 'orderBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PinnedPagesScalarFieldEnum = (typeof PinnedPagesScalarFieldEnum)[keyof typeof PinnedPagesScalarFieldEnum]
 
 
 export const BridgeResourceScalarFieldEnum = {
@@ -964,17 +969,6 @@ export const BridgeResourceScalarFieldEnum = {
 export type BridgeResourceScalarFieldEnum = (typeof BridgeResourceScalarFieldEnum)[keyof typeof BridgeResourceScalarFieldEnum]
 
 
-export const HistoryScalarFieldEnum = {
-  id: 'id',
-  pageId: 'pageId',
-  timestamp: 'timestamp',
-  changes: 'changes',
-  by: 'by'
-} as const
-
-export type HistoryScalarFieldEnum = (typeof HistoryScalarFieldEnum)[keyof typeof HistoryScalarFieldEnum]
-
-
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -983,19 +977,19 @@ export const SortOrder = {
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
 export const NullableJsonNullValueInput = {
   DbNull: DbNull,
   JsonNull: JsonNull
 } as const
 
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
-
-
-export const JsonNullValueInput = {
-  JsonNull: JsonNull
-} as const
-
-export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {
@@ -1044,13 +1038,6 @@ export type ListStringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaMod
 
 
 /**
- * Reference to a field of type 'Boolean'
- */
-export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
-    
-
-
-/**
  * Reference to a field of type 'DateTime'
  */
 export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
@@ -1089,6 +1076,13 @@ export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'J
  * Reference to a field of type 'QueryMode'
  */
 export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
+    
+
+
+/**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
     
 
 
@@ -1203,9 +1197,9 @@ export type GlobalOmitConfig = {
   account?: Prisma.AccountOmit
   workspace?: Prisma.WorkspaceOmit
   page?: Prisma.PageOmit
-  pageBlock?: Prisma.PageBlockOmit
+  block?: Prisma.BlockOmit
+  pinnedPages?: Prisma.PinnedPagesOmit
   bridgeResource?: Prisma.BridgeResourceOmit
-  history?: Prisma.HistoryOmit
 }
 
 /* Types for Logging */

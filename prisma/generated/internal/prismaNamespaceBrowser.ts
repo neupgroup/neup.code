@@ -54,9 +54,9 @@ export const ModelName = {
   Account: 'Account',
   Workspace: 'Workspace',
   Page: 'Page',
-  PageBlock: 'PageBlock',
-  BridgeResource: 'BridgeResource',
-  History: 'History'
+  Block: 'Block',
+  PinnedPages: 'PinnedPages',
+  BridgeResource: 'BridgeResource'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -85,14 +85,7 @@ export type AccountScalarFieldEnum = (typeof AccountScalarFieldEnum)[keyof typeo
 export const WorkspaceScalarFieldEnum = {
   id: 'id',
   accountId: 'accountId',
-  name: 'name',
-  permit: 'permit',
-  description: 'description',
-  sharedWith: 'sharedWith',
-  isHidden: 'isHidden',
-  isDefault: 'isDefault',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  permit: 'permit'
 } as const
 
 export type WorkspaceScalarFieldEnum = (typeof WorkspaceScalarFieldEnum)[keyof typeof WorkspaceScalarFieldEnum]
@@ -111,17 +104,29 @@ export const PageScalarFieldEnum = {
 export type PageScalarFieldEnum = (typeof PageScalarFieldEnum)[keyof typeof PageScalarFieldEnum]
 
 
-export const PageBlockScalarFieldEnum = {
+export const BlockScalarFieldEnum = {
   id: 'id',
   pageId: 'pageId',
-  kind: 'kind',
+  type: 'type',
   content: 'content',
   position: 'position',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
-export type PageBlockScalarFieldEnum = (typeof PageBlockScalarFieldEnum)[keyof typeof PageBlockScalarFieldEnum]
+export type BlockScalarFieldEnum = (typeof BlockScalarFieldEnum)[keyof typeof BlockScalarFieldEnum]
+
+
+export const PinnedPagesScalarFieldEnum = {
+  id: 'id',
+  workspaceId: 'workspaceId',
+  pageIds: 'pageIds',
+  orderBy: 'orderBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PinnedPagesScalarFieldEnum = (typeof PinnedPagesScalarFieldEnum)[keyof typeof PinnedPagesScalarFieldEnum]
 
 
 export const BridgeResourceScalarFieldEnum = {
@@ -147,17 +152,6 @@ export const BridgeResourceScalarFieldEnum = {
 export type BridgeResourceScalarFieldEnum = (typeof BridgeResourceScalarFieldEnum)[keyof typeof BridgeResourceScalarFieldEnum]
 
 
-export const HistoryScalarFieldEnum = {
-  id: 'id',
-  pageId: 'pageId',
-  timestamp: 'timestamp',
-  changes: 'changes',
-  by: 'by'
-} as const
-
-export type HistoryScalarFieldEnum = (typeof HistoryScalarFieldEnum)[keyof typeof HistoryScalarFieldEnum]
-
-
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -166,19 +160,19 @@ export const SortOrder = {
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
 export const NullableJsonNullValueInput = {
   DbNull: DbNull,
   JsonNull: JsonNull
 } as const
 
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
-
-
-export const JsonNullValueInput = {
-  JsonNull: JsonNull
-} as const
-
-export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {

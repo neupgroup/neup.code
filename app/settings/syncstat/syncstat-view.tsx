@@ -9,6 +9,12 @@ import {
   type BridgeItem,
 } from "../../bridge/bridge-storage";
 import {
+  loadPinnedPages,
+  PINNED_PAGES_STORAGE_EVENT,
+  type PinnedPagesOrderBy,
+  type WorkspacePinnedPages,
+} from "../../pinned-pages-storage";
+import {
   loadWorkspacePageBlocks,
   WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT,
   type WorkspacePageBlock,
@@ -22,13 +28,7 @@ import {
 
 type SyncWorkspace = {
   id: string;
-  name: string;
   permit: string;
-  description: string;
-  sharedWith: string[];
-  isHidden?: boolean;
-  isDefault?: boolean;
-  createdAt: string;
 };
 
 type SyncPage = {
@@ -43,7 +43,7 @@ type SyncPage = {
 type SyncBlock = {
   id: string;
   pageId: string;
-  kind: WorkspacePageBlockKind | "api" | "webhook" | "grpc";
+  type: WorkspacePageBlockKind | "api" | "webhook" | "grpc";
   content: string;
   position: number;
   createdAt: string;
@@ -68,11 +68,19 @@ type SyncBridge = {
   createdAt: string;
 };
 
+type SyncPinnedPages = {
+  id: string;
+  workspaceId: string;
+  pageIds: string[];
+  orderBy: PinnedPagesOrderBy;
+};
+
 type ComparableSnapshot = {
   workspaces: SyncWorkspace[];
   pages: SyncPage[];
   blocks: SyncBlock[];
   bridges: SyncBridge[];
+  pinnedPages: SyncPinnedPages[];
 };
 
 type BrowserSnapshot = ComparableSnapshot & {
@@ -82,6 +90,7 @@ type BrowserSnapshot = ComparableSnapshot & {
     workspaces: WorkspaceItem[];
     bridges: BridgeItem[];
     pageBlocks: WorkspacePageBlock[];
+    pinnedPages: WorkspacePinnedPages[];
     bridgeRuns: ReturnType<typeof loadBridgeRuns>;
   };
 };
@@ -92,14 +101,7 @@ type DatabaseResponse = {
   workspaces: Array<{
     id: string;
     accountId: string;
-    name: string;
     permit: string;
-    description: string;
-    sharedWith: string[];
-    isHidden: boolean;
-    isDefault: boolean;
-    createdAt: string;
-    updatedAt: string;
   }>;
   pages: Array<{
     id: string;
@@ -113,7 +115,7 @@ type DatabaseResponse = {
   blocks: Array<{
     id: string;
     pageId: string;
-    kind: string;
+    type: string;
     content: string;
     position: number;
     createdAt: string;
@@ -135,6 +137,14 @@ type DatabaseResponse = {
     privateNote?: string | null;
     publicNote?: string | null;
     notes?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  pinnedPages: Array<{
+    id: string;
+    workspaceId: string;
+    pageIds: string[];
+    orderBy: string;
     createdAt: string;
     updatedAt: string;
   }>;
@@ -180,13 +190,30 @@ const COLLECTION_LABELS = {
   pages: "Pages",
   blocks: "Blocks",
   bridges: "Bridges",
+  pinnedPages: "Pinned Pages",
 } satisfies Record<keyof ComparableSnapshot, string>;
+
+const PINNED_PAGES_ORDER_BY_VALUES = [
+  "ascending.title",
+  "descending.title",
+  "ascending.date",
+  "descending.date",
+  "custom",
+] as const;
+
+function normalizePinnedPagesOrderBy(value: string): PinnedPagesOrderBy {
+  if (PINNED_PAGES_ORDER_BY_VALUES.includes(value as PinnedPagesOrderBy)) {
+    return value as PinnedPagesOrderBy;
+  }
+
+  return "custom";
+}
 
 function getDefaultWorkspaceId(workspaces: WorkspaceItem[]) {
   return workspaces.find((ws) => ws.isDefault)?.id ?? workspaces[0]?.id ?? null;
 }
 
-function getBlockKindForBridge(item: BridgeItem): "api" | "webhook" | "grpc" {
+function getBlockTypeForBridge(item: BridgeItem): "api" | "webhook" | "grpc" {
   if (item.bridgeType === "webhook") return "webhook";
   if (item.bridgeType === "grpc") return "grpc";
   return "api";
@@ -200,24 +227,20 @@ function buildBrowserSnapshot(): BrowserSnapshot {
   const workspaces = loadWorkspaces();
   const bridges = loadBridges();
   const pageBlocks = loadWorkspacePageBlocks();
+  const pinnedPages = loadPinnedPages();
   const bridgeRuns = loadBridgeRuns();
   const generatedAt = new Date().toISOString();
   const defaultWorkspaceId = getDefaultWorkspaceId(workspaces);
 
   const comparable: ComparableSnapshot = {
-    workspaces: workspaces.map((ws) => ({
-      id: ws.id,
-      name: ws.name,
+    workspaces: workspaces.map((workspace) => ({
+      id: workspace.id,
       permit: "owner",
-      description: ws.description ?? "",
-      sharedWith: ws.sharedWith ?? [],
-      isHidden: Boolean(ws.isHidden),
-      isDefault: Boolean(ws.isDefault),
-      createdAt: ws.createdAt ?? generatedAt,
     })),
     pages: [],
     blocks: [],
     bridges: [],
+    pinnedPages,
   };
 
   let warning: string | null = null;
@@ -260,7 +283,7 @@ function buildBrowserSnapshot(): BrowserSnapshot {
       const pageChildren = childrenByPage.get(page.id) ?? [];
       pageChildren.forEach((item, index) => {
         const entryKind = item.entryKind ?? "bridge";
-        const kind: SyncBlock["kind"] =
+        const type: SyncBlock["type"] =
           entryKind === "note" ||
           entryKind === "heading1" ||
           entryKind === "heading2" ||
@@ -268,17 +291,17 @@ function buildBrowserSnapshot(): BrowserSnapshot {
             ? entryKind
             : entryKind === "chapter"
               ? "chapter"
-              : getBlockKindForBridge(item);
+              : getBlockTypeForBridge(item);
 
         const content =
-          kind === "note" || kind === "heading1" || kind === "heading2" || kind === "heading3"
+          type === "note" || type === "heading1" || type === "heading2" || type === "heading3"
             ? item.publicNote ?? item.notes ?? ""
             : item.id;
 
         blocks.push({
           id: item.id,
           pageId: page.id,
-          kind,
+          type,
           content,
           position: index,
           createdAt: item.createdAt ?? generatedAt,
@@ -292,7 +315,7 @@ function buildBrowserSnapshot(): BrowserSnapshot {
         blocks.push({
           id: block.id,
           pageId: rootPageId,
-          kind: block.kind,
+          type: block.kind,
           content: block.content,
           position: index,
           createdAt: block.createdAt ?? generatedAt,
@@ -330,6 +353,7 @@ function buildBrowserSnapshot(): BrowserSnapshot {
       workspaces,
       bridges,
       pageBlocks,
+      pinnedPages,
       bridgeRuns,
     },
     ...comparable,
@@ -340,13 +364,7 @@ function normalizeDatabaseResponse(data: DatabaseResponse): ComparableSnapshot {
   return {
     workspaces: data.workspaces.map((item) => ({
       id: item.id,
-      name: item.name,
       permit: item.permit,
-      description: item.description,
-      sharedWith: item.sharedWith,
-      isHidden: item.isHidden,
-      isDefault: item.isDefault,
-      createdAt: item.createdAt,
     })),
     pages: data.pages.map((item) => ({
       id: item.id,
@@ -359,7 +377,7 @@ function normalizeDatabaseResponse(data: DatabaseResponse): ComparableSnapshot {
     blocks: data.blocks.map((item) => ({
       id: item.id,
       pageId: item.pageId,
-      kind: item.kind as SyncBlock["kind"],
+      type: item.type as SyncBlock["type"],
       content: item.content,
       position: item.position,
       createdAt: item.createdAt,
@@ -382,6 +400,12 @@ function normalizeDatabaseResponse(data: DatabaseResponse): ComparableSnapshot {
       notes: item.notes ?? null,
       createdAt: item.createdAt,
     })),
+    pinnedPages: data.pinnedPages.map((item) => ({
+      id: item.id,
+      workspaceId: item.workspaceId,
+      pageIds: item.pageIds,
+      orderBy: normalizePinnedPagesOrderBy(item.orderBy),
+    })),
   };
 }
 
@@ -394,7 +418,8 @@ function isDatabaseResponse(value: unknown): value is DatabaseResponse {
     Array.isArray(candidate.workspaces) &&
     Array.isArray(candidate.pages) &&
     Array.isArray(candidate.blocks) &&
-    Array.isArray(candidate.bridges)
+    Array.isArray(candidate.bridges) &&
+    Array.isArray(candidate.pinnedPages)
   );
 }
 
@@ -573,12 +598,14 @@ export function SyncStatView() {
     window.addEventListener(WORKSPACE_STORAGE_EVENT, refreshBrowserSnapshot);
     window.addEventListener(BRIDGE_STORAGE_EVENT, refreshBrowserSnapshot);
     window.addEventListener(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT, refreshBrowserSnapshot);
+    window.addEventListener(PINNED_PAGES_STORAGE_EVENT, refreshBrowserSnapshot);
     window.addEventListener("storage", refreshBrowserSnapshot);
 
     return () => {
       window.removeEventListener(WORKSPACE_STORAGE_EVENT, refreshBrowserSnapshot);
       window.removeEventListener(BRIDGE_STORAGE_EVENT, refreshBrowserSnapshot);
       window.removeEventListener(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT, refreshBrowserSnapshot);
+      window.removeEventListener(PINNED_PAGES_STORAGE_EVENT, refreshBrowserSnapshot);
       window.removeEventListener("storage", refreshBrowserSnapshot);
     };
   }, []);
@@ -628,6 +655,7 @@ export function SyncStatView() {
         compareCollections(COLLECTION_LABELS.pages, browserSnapshot.pages, databaseSnapshot.snapshot.pages),
         compareCollections(COLLECTION_LABELS.blocks, browserSnapshot.blocks, databaseSnapshot.snapshot.blocks),
         compareCollections(COLLECTION_LABELS.bridges, browserSnapshot.bridges, databaseSnapshot.snapshot.bridges),
+        compareCollections(COLLECTION_LABELS.pinnedPages, browserSnapshot.pinnedPages, databaseSnapshot.snapshot.pinnedPages),
       ]
     : [];
 
@@ -653,8 +681,8 @@ export function SyncStatView() {
               Sync Status
             </h1>
             <p className="max-w-3xl text-[0.9rem] leading-[1.5] text-muted-foreground">
-              Inspect the workspace data still stored in this browser and compare it with the
-              current snapshot returned from the database through <code>/api/state</code>.
+              Inspect the browser snapshot that will be synced and compare it with the current
+              database state returned from <code>/api/state</code>.
             </p>
           </div>
         </div>
@@ -678,6 +706,7 @@ export function SyncStatView() {
             <p>Pages: <span className="font-semibold text-foreground">{browserSnapshot.pages.length}</span></p>
             <p>Blocks: <span className="font-semibold text-foreground">{browserSnapshot.blocks.length}</span></p>
             <p>Bridges: <span className="font-semibold text-foreground">{browserSnapshot.bridges.length}</span></p>
+            <p>Pinned configs: <span className="font-semibold text-foreground">{browserSnapshot.pinnedPages.length}</span></p>
             <p className="text-muted-foreground">
               Generated from browser storage: {formatTimestamp(browserSnapshot.generatedAt)}
             </p>
@@ -693,6 +722,7 @@ export function SyncStatView() {
             <p>Pages: <span className="font-semibold text-foreground">{databaseSnapshot.snapshot?.pages.length ?? 0}</span></p>
             <p>Blocks: <span className="font-semibold text-foreground">{databaseSnapshot.snapshot?.blocks.length ?? 0}</span></p>
             <p>Bridges: <span className="font-semibold text-foreground">{databaseSnapshot.snapshot?.bridges.length ?? 0}</span></p>
+            <p>Pinned configs: <span className="font-semibold text-foreground">{databaseSnapshot.snapshot?.pinnedPages.length ?? 0}</span></p>
             <p className="text-muted-foreground">
               Last fetch: {formatTimestamp(databaseSnapshot.fetchedAt)}
             </p>
@@ -740,13 +770,11 @@ export function SyncStatView() {
             key={collection.label}
             className="rounded-2xl border border-border bg-background p-5"
           >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-[0.98rem] font-semibold text-foreground">{collection.label}</h2>
-                <p className="mt-1 text-[0.82rem] text-muted-foreground">
-                  Browser {collection.browserCount} · Database {collection.databaseCount}
-                </p>
-              </div>
+            <div>
+              <h2 className="text-[0.98rem] font-semibold text-foreground">{collection.label}</h2>
+              <p className="mt-1 text-[0.82rem] text-muted-foreground">
+                Browser {collection.browserCount} · Database {collection.databaseCount}
+              </p>
             </div>
 
             <div className="mt-4 grid gap-4">
@@ -770,7 +798,7 @@ export function SyncStatView() {
       <div className="grid gap-4 xl:grid-cols-2">
         <SnapshotPanel
           title="Browser source stores"
-          subtitle="Directly loaded from localStorage in this browser."
+          subtitle="Loaded from browser storage for this session, including session-backed pinned pages."
           data={browserSnapshot.raw}
         />
         <SnapshotPanel
@@ -783,6 +811,7 @@ export function SyncStatView() {
             pages: browserSnapshot.pages,
             blocks: browserSnapshot.blocks,
             bridges: browserSnapshot.bridges,
+            pinnedPages: browserSnapshot.pinnedPages,
           }}
         />
       </div>

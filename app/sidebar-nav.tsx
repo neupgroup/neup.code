@@ -12,6 +12,13 @@ import {
   type BridgeItem,
 } from "./bridge/bridge-storage";
 import { getPageDocHref } from "./bridge/paths";
+import {
+  loadPinnedPages,
+  PINNED_PAGES_STORAGE_EVENT,
+  removePinnedPage,
+  upsertPinnedPages,
+  type WorkspacePinnedPages,
+} from "./pinned-pages-storage";
 import { loadWorkspaces, WORKSPACE_STORAGE_EVENT, type WorkspaceItem } from "./workspace/workspace-storage";
 
 type SidebarIconName =
@@ -38,6 +45,12 @@ type SidebarGroup = {
   title: string;
   links: SidebarLink[];
 };
+
+function createLocalId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 const sidebarGroups: SidebarGroup[] = [
   {
@@ -175,12 +188,54 @@ function SidebarIcon({ name }: { name: SidebarIconName }) {
   }
 }
 
+function sortWorkspacePages(pages: BridgeItem[], pinnedConfig: WorkspacePinnedPages | null) {
+  const fallbackSorter = (left: BridgeItem, right: BridgeItem) =>
+    new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+
+  const pinnedIds = new Set(pinnedConfig?.pageIds ?? []);
+  const pinnedPages = pages.filter((page) => pinnedIds.has(page.id));
+  const unpinnedPages = pages.filter((page) => !pinnedIds.has(page.id));
+
+  if (!pinnedConfig) {
+    return [...pages].sort(fallbackSorter);
+  }
+
+  const titleAscending = (left: BridgeItem, right: BridgeItem) =>
+    (left.name || "Untitled page").localeCompare(right.name || "Untitled page");
+  const titleDescending = (left: BridgeItem, right: BridgeItem) => titleAscending(right, left);
+  const dateAscending = fallbackSorter;
+  const dateDescending = (left: BridgeItem, right: BridgeItem) => fallbackSorter(right, left);
+
+  const sorters = {
+    "ascending.title": titleAscending,
+    "descending.title": titleDescending,
+    "ascending.date": dateAscending,
+    "descending.date": dateDescending,
+    custom: fallbackSorter,
+  } as const;
+
+  if (pinnedConfig.orderBy === "custom") {
+    const customOrder = new Map(pinnedConfig.pageIds.map((pageId, index) => [pageId, index]));
+    pinnedPages.sort(
+      (left, right) => (customOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (customOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+    );
+    unpinnedPages.sort(fallbackSorter);
+    return [...pinnedPages, ...unpinnedPages];
+  }
+
+  const sorter = sorters[pinnedConfig.orderBy];
+  pinnedPages.sort(sorter);
+  unpinnedPages.sort(sorter);
+  return [...pinnedPages, ...unpinnedPages];
+}
+
 export function SidebarNav() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const docId = searchParams.get("id");
   const [notePages, setNotePages] = useState<BridgeItem[]>([]);
+  const [pinnedPages, setPinnedPages] = useState<WorkspacePinnedPages[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const [expandedWorkspaceId, setExpandedWorkspaceId] = useState<string | null | undefined>(undefined);
   const [accessedFrom, setAccessedFrom] = useState<string[] | null>(null);
@@ -188,6 +243,7 @@ export function SidebarNav() {
     x: number;
     y: number;
     page: BridgeItem;
+    workspaceId: string;
   } | null>(null);
 
   useEffect(() => {
@@ -238,8 +294,24 @@ export function SidebarNav() {
     } catch {}
   }
 
-  function handleDelete(page: BridgeItem) {
+  function handleDelete(page: BridgeItem, workspaceId: string) {
     deleteBridge(page.id);
+    removePinnedPage(workspaceId, page.id);
+  }
+
+  function handleTogglePinnedPage(page: BridgeItem, workspaceId: string) {
+    const existing = pinnedPages.find((item) => item.workspaceId === workspaceId) ?? null;
+    if (existing?.pageIds.includes(page.id)) {
+      removePinnedPage(workspaceId, page.id);
+      return;
+    }
+
+    upsertPinnedPages({
+      id: existing?.id ?? createLocalId(),
+      workspaceId,
+      pageIds: [...(existing?.pageIds ?? []), page.id],
+      orderBy: existing?.orderBy ?? "custom",
+    });
   }
 
   useEffect(() => {
@@ -258,6 +330,19 @@ export function SidebarNav() {
   }, []);
 
   useEffect(() => {
+    function syncPinnedPages() {
+      setPinnedPages(loadPinnedPages());
+    }
+
+    syncPinnedPages();
+    window.addEventListener(PINNED_PAGES_STORAGE_EVENT, syncPinnedPages);
+
+    return () => {
+      window.removeEventListener(PINNED_PAGES_STORAGE_EVENT, syncPinnedPages);
+    };
+  }, []);
+
+  useEffect(() => {
     function syncNotePages() {
       const currentBridges = loadBridges();
       const rootPages = currentBridges.filter(
@@ -266,10 +351,7 @@ export function SidebarNav() {
 
       if (rootPages.length === 0) {
         const nextIndexPage: BridgeItem = {
-          id:
-            typeof crypto !== "undefined" && "randomUUID" in crypto
-              ? crypto.randomUUID()
-              : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          id: createLocalId(),
           name: "Index",
           entryKind: "chapter",
           bridgeType: "api",
@@ -283,10 +365,7 @@ export function SidebarNav() {
         return;
       }
 
-      const orderedPages = [...rootPages].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
-      setNotePages(orderedPages);
+      setNotePages(rootPages);
     }
 
     syncNotePages();
@@ -311,10 +390,7 @@ export function SidebarNav() {
 
   function handleAddPage(currentWorkspaceName: string, workspaceId: string) {
     const nextPage: BridgeItem = {
-      id:
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      id: createLocalId(),
       name: "Untitled page",
       entryKind: "chapter",
       bridgeType: "api",
@@ -408,7 +484,10 @@ export function SidebarNav() {
             >
               <div className="overflow-hidden min-h-0">
                 <div className="flex flex-col gap-0.5 pt-0.5 pb-0.5">
-                  {notePages.filter(p => p.workspaceId === ws.id || (!p.workspaceId && ws.isDefault)).map((page) => {
+                  {sortWorkspacePages(
+                    notePages.filter((page) => page.workspaceId === ws.id || (!page.workspaceId && ws.isDefault)),
+                    pinnedPages.find((item) => item.workspaceId === ws.id) ?? null,
+                  ).map((page) => {
                     const href = getPageDocHref(page.id);
                     const isExplicitlyActive = (pathname === "/doc" && docId === page.id);
                     const isDocContext = pathname === "/doc" || pathname.startsWith("/bridge");
@@ -430,6 +509,7 @@ export function SidebarNav() {
                               x: e.clientX,
                               y: e.clientY,
                               page,
+                              workspaceId: ws.id,
                             });
                           }}
                           className="flex h-9 flex-1 items-center gap-2 px-3 text-[0.93rem] font-semibold tracking-[0]"
@@ -449,6 +529,7 @@ export function SidebarNav() {
                               x: e.clientX,
                               y: e.clientY,
                               page,
+                              workspaceId: ws.id,
                             });
                           }}
                           className={`absolute right-2 ${isContextMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"} flex h-7 w-7 items-center justify-center rounded-lg hover:bg-background/80 text-foreground/50 hover:text-foreground transition-all`}
@@ -485,6 +566,16 @@ export function SidebarNav() {
           <button
             type="button"
             className="flex w-full items-center rounded-lg px-2 py-1.5 hover:bg-muted text-left transition-colors"
+            onClick={() => { handleTogglePinnedPage(contextMenu.page, contextMenu.workspaceId); setContextMenu(null); }}
+          >
+            {(pinnedPages.find((item) => item.workspaceId === contextMenu.workspaceId)?.pageIds ?? []).includes(contextMenu.page.id)
+              ? "Unpin page"
+              : "Pin page"}
+          </button>
+          <hr className="my-1 border-border" />
+          <button
+            type="button"
+            className="flex w-full items-center rounded-lg px-2 py-1.5 hover:bg-muted text-left transition-colors"
             onClick={() => { handleCut(contextMenu.page); setContextMenu(null); }}
           >
             Cut
@@ -507,7 +598,7 @@ export function SidebarNav() {
           <button
             type="button"
             className="flex w-full items-center rounded-lg px-2 py-1.5 text-red-500 hover:bg-muted hover:text-red-600 text-left transition-colors"
-            onClick={() => { handleDelete(contextMenu.page); setContextMenu(null); }}
+            onClick={() => { handleDelete(contextMenu.page, contextMenu.workspaceId); setContextMenu(null); }}
           >
             Delete
           </button>
