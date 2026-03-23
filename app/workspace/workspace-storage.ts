@@ -11,11 +11,16 @@ export type WorkspaceItem = {
 export const WORKSPACE_STORAGE_KEY = "neup.code.workspace.profiles.v1";
 export const WORKSPACE_STORAGE_EVENT = "neup.code.workspace.profiles.updated";
 
+function readWorkspaceStorageRaw() {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(WORKSPACE_STORAGE_KEY) ?? window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
+}
+
 export function loadWorkspaces(): WorkspaceItem[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const raw = window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
+    const raw = readWorkspaceStorageRaw();
     if (!raw) return [];
     return JSON.parse(raw) as WorkspaceItem[];
   } catch {
@@ -25,6 +30,7 @@ export function loadWorkspaces(): WorkspaceItem[] {
 
 export function saveWorkspaces(items: WorkspaceItem[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(items));
+  window.sessionStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(items));
+  window.localStorage.removeItem(WORKSPACE_STORAGE_KEY);
   window.dispatchEvent(new Event(WORKSPACE_STORAGE_EVENT));
 }

@@ -26,6 +26,14 @@ const BRIDGE_RESOURCE_BLOCK_KINDS = new Set<WorkspacePageBlockKind>([
   "grpc",
 ]);
 
+function readWorkspacePageBlocksRaw() {
+  if (typeof window === "undefined") return null;
+  return (
+    window.sessionStorage.getItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY) ??
+    window.localStorage.getItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY)
+  );
+}
+
 function isWorkspacePageKey(value: string): value is WorkspacePageKey {
   return value === "bridge";
 }
@@ -67,7 +75,7 @@ export function loadWorkspacePageBlocks(): WorkspacePageBlock[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const raw = window.localStorage.getItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY);
+    const raw = readWorkspacePageBlocksRaw();
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
@@ -83,7 +91,8 @@ export function loadWorkspacePageBlocksFor(pageKey: WorkspacePageKey) {
 
 export function saveWorkspacePageBlocks(items: WorkspacePageBlock[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY, JSON.stringify(items));
+  window.sessionStorage.setItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY, JSON.stringify(items));
+  window.localStorage.removeItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY);
   window.dispatchEvent(new Event(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT));
 }
 

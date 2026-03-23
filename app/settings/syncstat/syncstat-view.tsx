@@ -2,154 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { SyncApiError, loadSyncSnapshot } from "@/services/sync-client";
 import {
-  BRIDGE_STORAGE_EVENT,
-  loadBridgeRuns,
-  loadBridges,
-  type BridgeItem,
-} from "../../bridge/bridge-storage";
-import {
-  loadPinnedPages,
-  PINNED_PAGES_STORAGE_EVENT,
-  type PinnedPagesOrderBy,
-  type WorkspacePinnedPages,
-} from "../../pinned-pages-storage";
-import {
-  loadWorkspacePageBlocks,
-  WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT,
-  type WorkspacePageBlock,
-  type WorkspacePageBlockKind,
-} from "../../page-blocks-storage";
-import {
-  loadWorkspaces,
-  WORKSPACE_STORAGE_EVENT,
-  type WorkspaceItem,
-} from "../../workspace/workspace-storage";
-
-type SyncWorkspace = {
-  id: string;
-  permit: string;
-};
-
-type SyncPage = {
-  id: string;
-  workspaceId: string;
-  title: string;
-  icon: string | null;
-  cover: string | null;
-  createdAt: string;
-};
-
-type SyncBlock = {
-  id: string;
-  pageId: string;
-  type: WorkspacePageBlockKind | "api" | "webhook" | "grpc";
-  content: string;
-  position: number;
-  createdAt: string;
-};
-
-type SyncBridge = {
-  id: string;
-  workspaceId: string;
-  name: string;
-  bridgeType: string;
-  endpoint: string;
-  environment: string;
-  method: string | null;
-  apiConfig?: unknown;
-  requiredFields?: unknown;
-  serviceName?: string | null;
-  secret?: string | null;
-  isPrivateInternal?: boolean;
-  privateNote?: string | null;
-  publicNote?: string | null;
-  notes?: string | null;
-  createdAt: string;
-};
-
-type SyncPinnedPages = {
-  id: string;
-  workspaceId: string;
-  pageIds: string[];
-  orderBy: PinnedPagesOrderBy;
-};
-
-type ComparableSnapshot = {
-  workspaces: SyncWorkspace[];
-  pages: SyncPage[];
-  blocks: SyncBlock[];
-  bridges: SyncBridge[];
-  pinnedPages: SyncPinnedPages[];
-};
-
-type BrowserSnapshot = ComparableSnapshot & {
-  generatedAt: string;
-  warning: string | null;
-  raw: {
-    workspaces: WorkspaceItem[];
-    bridges: BridgeItem[];
-    pageBlocks: WorkspacePageBlock[];
-    pinnedPages: WorkspacePinnedPages[];
-    bridgeRuns: ReturnType<typeof loadBridgeRuns>;
-  };
-};
-
-type DatabaseResponse = {
-  ok: true;
-  accountId: string;
-  workspaces: Array<{
-    id: string;
-    accountId: string;
-    permit: string;
-  }>;
-  pages: Array<{
-    id: string;
-    workspaceId: string;
-    title: string;
-    icon: string | null;
-    cover: string | null;
-    createdAt: string;
-    updatedAt: string;
-  }>;
-  blocks: Array<{
-    id: string;
-    pageId: string;
-    type: string;
-    content: string;
-    position: number;
-    createdAt: string;
-    updatedAt: string;
-  }>;
-  bridges: Array<{
-    id: string;
-    workspaceId: string;
-    name: string;
-    bridgeType: string;
-    endpoint: string;
-    environment: string;
-    method: string | null;
-    apiConfig?: unknown;
-    requiredFields?: unknown;
-    serviceName?: string | null;
-    secret?: string | null;
-    isPrivateInternal: boolean;
-    privateNote?: string | null;
-    publicNote?: string | null;
-    notes?: string | null;
-    createdAt: string;
-    updatedAt: string;
-  }>;
-  pinnedPages: Array<{
-    id: string;
-    workspaceId: string;
-    pageIds: string[];
-    orderBy: string;
-    createdAt: string;
-    updatedAt: string;
-  }>;
-};
+  buildBrowserSnapshot,
+  buildBrowserSyncPayload,
+  clearBufferedSyncPayload,
+  clearPersistentBrowserStores,
+  loadBufferedSyncPayload,
+  type BrowserComparableSnapshot,
+  type BrowserSnapshot,
+  type BrowserSyncPayload,
+  BROWSER_SYNC_BUFFER_EVENT,
+} from "@/services/browser-sync";
+import { SyncApiError, flushSyncSnapshot, loadSyncSnapshot } from "@/services/sync-client";
+import { BRIDGE_STORAGE_EVENT } from "../../bridge/bridge-storage";
+import { PINNED_PAGES_STORAGE_EVENT } from "../../pinned-pages-storage";
+import { WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT } from "../../page-blocks-storage";
+import { WORKSPACE_STORAGE_EVENT } from "../../workspace/workspace-storage";
 
 type DatabaseSnapshotState =
   | {
@@ -158,15 +26,15 @@ type DatabaseSnapshotState =
       accountId: string | null;
       error: string | null;
       raw: unknown;
-      snapshot: ComparableSnapshot | null;
+      snapshot: BrowserComparableSnapshot | null;
     }
   | {
       status: "ready";
       fetchedAt: string;
       accountId: string;
       error: null;
-      raw: DatabaseResponse;
-      snapshot: ComparableSnapshot;
+      raw: Awaited<ReturnType<typeof loadSyncSnapshot>>;
+      snapshot: BrowserComparableSnapshot;
     }
   | {
       status: "error";
@@ -192,176 +60,9 @@ const COLLECTION_LABELS = {
   blocks: "Blocks",
   bridges: "Bridges",
   pinnedPages: "Pinned Pages",
-} satisfies Record<keyof ComparableSnapshot, string>;
+} satisfies Record<keyof BrowserComparableSnapshot, string>;
 
-const PINNED_PAGES_ORDER_BY_VALUES = [
-  "ascending.title",
-  "descending.title",
-  "ascending.date",
-  "descending.date",
-  "custom",
-] as const;
-
-function normalizePinnedPagesOrderBy(value: string): PinnedPagesOrderBy {
-  if (PINNED_PAGES_ORDER_BY_VALUES.includes(value as PinnedPagesOrderBy)) {
-    return value as PinnedPagesOrderBy;
-  }
-
-  return "custom";
-}
-
-function getDefaultWorkspaceId(workspaces: WorkspaceItem[]) {
-  return workspaces.find((ws) => ws.isDefault)?.id ?? workspaces[0]?.id ?? null;
-}
-
-function getBlockTypeForBridge(item: BridgeItem): "api" | "webhook" | "grpc" {
-  if (item.bridgeType === "webhook") return "webhook";
-  if (item.bridgeType === "grpc") return "grpc";
-  return "api";
-}
-
-function isSystemBridgePageId(id: string) {
-  return id === "sys-bridge" || id.startsWith("sys-bridge-");
-}
-
-function buildBrowserSnapshot(): BrowserSnapshot {
-  const workspaces = loadWorkspaces();
-  const bridges = loadBridges();
-  const pageBlocks = loadWorkspacePageBlocks();
-  const pinnedPages = loadPinnedPages();
-  const bridgeRuns = loadBridgeRuns();
-  const generatedAt = new Date().toISOString();
-  const defaultWorkspaceId = getDefaultWorkspaceId(workspaces);
-
-  const comparable: ComparableSnapshot = {
-    workspaces: workspaces.map((workspace) => ({
-      id: workspace.id,
-      permit: "owner",
-    })),
-    pages: [],
-    blocks: [],
-    bridges: [],
-    pinnedPages,
-  };
-
-  let warning: string | null = null;
-
-  if (!defaultWorkspaceId) {
-    warning = "No workspace profile is saved in this browser, so the sync payload cannot be derived yet.";
-  } else {
-    const pages: SyncPage[] = bridges
-      .filter((item) => (item.entryKind ?? "bridge") === "chapter")
-      .map((item) => ({
-        id: item.id,
-        workspaceId: item.workspaceId ?? defaultWorkspaceId,
-        title: item.name || "Untitled page",
-        icon: null,
-        cover: null,
-        createdAt: item.createdAt ?? generatedAt,
-      }));
-
-    const rootPageId = `sys-bridge-${defaultWorkspaceId}`;
-    pages.push({
-      id: rootPageId,
-      workspaceId: defaultWorkspaceId,
-      title: "Bridge",
-      icon: null,
-      cover: null,
-      createdAt: "0",
-    });
-
-    const blocks: SyncBlock[] = [];
-    const childrenByPage = new Map<string, BridgeItem[]>();
-    for (const item of bridges) {
-      if (!item.parentChapterId) continue;
-      const list = childrenByPage.get(item.parentChapterId) ?? [];
-      list.push(item);
-      childrenByPage.set(item.parentChapterId, list);
-    }
-
-    for (const page of pages) {
-      if (isSystemBridgePageId(page.id)) continue;
-      const pageChildren = childrenByPage.get(page.id) ?? [];
-      pageChildren.forEach((item, index) => {
-        const entryKind = item.entryKind ?? "bridge";
-        const type: SyncBlock["type"] =
-          entryKind === "note" ||
-          entryKind === "heading1" ||
-          entryKind === "heading2" ||
-          entryKind === "heading3"
-            ? entryKind
-            : entryKind === "chapter"
-              ? "chapter"
-              : getBlockTypeForBridge(item);
-
-        const content =
-          type === "note" || type === "heading1" || type === "heading2" || type === "heading3"
-            ? item.publicNote ?? item.notes ?? ""
-            : item.id;
-
-        blocks.push({
-          id: item.id,
-          pageId: page.id,
-          type,
-          content,
-          position: index,
-          createdAt: item.createdAt ?? generatedAt,
-        });
-      });
-    }
-
-    pageBlocks
-      .filter((block) => block.pageKey === "bridge")
-      .forEach((block, index) => {
-        blocks.push({
-          id: block.id,
-          pageId: rootPageId,
-          type: block.kind,
-          content: block.content,
-          position: index,
-          createdAt: block.createdAt ?? generatedAt,
-        });
-      });
-
-    comparable.pages = pages;
-    comparable.blocks = blocks;
-    comparable.bridges = bridges
-      .filter((item) => (item.entryKind ?? "bridge") === "bridge")
-      .map((item) => ({
-        id: item.id,
-        workspaceId: item.workspaceId ?? defaultWorkspaceId,
-        name: item.name || "",
-        bridgeType: item.bridgeType,
-        endpoint: item.endpoint ?? "",
-        environment: item.environment ?? "development",
-        method: item.method ?? null,
-        apiConfig: item.apiConfig,
-        requiredFields: item.requiredFields,
-        serviceName: item.serviceName ?? null,
-        secret: item.secret ?? null,
-        isPrivateInternal: Boolean(item.isPrivateInternal),
-        privateNote: item.privateNote ?? null,
-        publicNote: item.publicNote ?? null,
-        notes: item.notes ?? null,
-        createdAt: item.createdAt ?? generatedAt,
-      }));
-  }
-
-  return {
-    generatedAt,
-    warning,
-    raw: {
-      workspaces,
-      bridges,
-      pageBlocks,
-      pinnedPages,
-      bridgeRuns,
-    },
-    ...comparable,
-  };
-}
-
-function normalizeDatabaseResponse(data: DatabaseResponse): ComparableSnapshot {
+function normalizeDatabaseResponse(data: Awaited<ReturnType<typeof loadSyncSnapshot>>): BrowserComparableSnapshot {
   return {
     workspaces: data.workspaces.map((item) => ({
       id: item.id,
@@ -378,7 +79,7 @@ function normalizeDatabaseResponse(data: DatabaseResponse): ComparableSnapshot {
     blocks: data.blocks.map((item) => ({
       id: item.id,
       pageId: item.pageId,
-      type: item.type as SyncBlock["type"],
+      type: item.type as BrowserComparableSnapshot["blocks"][number]["type"],
       content: item.content,
       position: item.position,
       createdAt: item.createdAt,
@@ -405,23 +106,9 @@ function normalizeDatabaseResponse(data: DatabaseResponse): ComparableSnapshot {
       id: item.id,
       workspaceId: item.workspaceId,
       pageIds: item.pageIds,
-      orderBy: normalizePinnedPagesOrderBy(item.orderBy),
+      orderBy: item.orderBy as BrowserComparableSnapshot["pinnedPages"][number]["orderBy"],
     })),
   };
-}
-
-function isDatabaseResponse(value: unknown): value is DatabaseResponse {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const candidate = value as Partial<DatabaseResponse>;
-  return (
-    candidate.ok === true &&
-    typeof candidate.accountId === "string" &&
-    Array.isArray(candidate.workspaces) &&
-    Array.isArray(candidate.pages) &&
-    Array.isArray(candidate.blocks) &&
-    Array.isArray(candidate.bridges) &&
-    Array.isArray(candidate.pinnedPages)
-  );
 }
 
 function stableSerialize(value: unknown): string {
@@ -524,17 +211,6 @@ async function loadDatabaseSnapshot(): Promise<DatabaseSnapshotState> {
 
   try {
     const data = await loadSyncSnapshot();
-    if (!isDatabaseResponse(data)) {
-      return {
-        status: "error",
-        fetchedAt,
-        accountId: null,
-        error: "The database snapshot response was not in the expected format.",
-        raw: data,
-        snapshot: null,
-      };
-    }
-
     return {
       status: "ready",
       fetchedAt,
@@ -563,6 +239,7 @@ async function loadDatabaseSnapshot(): Promise<DatabaseSnapshotState> {
 
 export function SyncStatView() {
   const [browserSnapshot, setBrowserSnapshot] = useState<BrowserSnapshot>(() => buildBrowserSnapshot());
+  const [bufferedPayload, setBufferedPayload] = useState<BrowserSyncPayload | null>(() => loadBufferedSyncPayload());
   const [databaseSnapshot, setDatabaseSnapshot] = useState<DatabaseSnapshotState>({
     status: "idle",
     fetchedAt: null,
@@ -571,55 +248,38 @@ export function SyncStatView() {
     raw: null,
     snapshot: null,
   });
+  const [pushState, setPushState] = useState<{
+    status: "idle" | "pushing" | "success" | "error";
+    message: string | null;
+  }>({
+    status: "idle",
+    message: null,
+  });
 
   useEffect(() => {
-    function refreshBrowserSnapshot() {
+    function refreshBrowserState() {
       setBrowserSnapshot(buildBrowserSnapshot());
+      setBufferedPayload(loadBufferedSyncPayload());
     }
 
-    window.addEventListener(WORKSPACE_STORAGE_EVENT, refreshBrowserSnapshot);
-    window.addEventListener(BRIDGE_STORAGE_EVENT, refreshBrowserSnapshot);
-    window.addEventListener(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT, refreshBrowserSnapshot);
-    window.addEventListener(PINNED_PAGES_STORAGE_EVENT, refreshBrowserSnapshot);
-    window.addEventListener("storage", refreshBrowserSnapshot);
+    window.addEventListener(WORKSPACE_STORAGE_EVENT, refreshBrowserState);
+    window.addEventListener(BRIDGE_STORAGE_EVENT, refreshBrowserState);
+    window.addEventListener(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT, refreshBrowserState);
+    window.addEventListener(PINNED_PAGES_STORAGE_EVENT, refreshBrowserState);
+    window.addEventListener(BROWSER_SYNC_BUFFER_EVENT, refreshBrowserState);
+    window.addEventListener("storage", refreshBrowserState);
 
     return () => {
-      window.removeEventListener(WORKSPACE_STORAGE_EVENT, refreshBrowserSnapshot);
-      window.removeEventListener(BRIDGE_STORAGE_EVENT, refreshBrowserSnapshot);
-      window.removeEventListener(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT, refreshBrowserSnapshot);
-      window.removeEventListener(PINNED_PAGES_STORAGE_EVENT, refreshBrowserSnapshot);
-      window.removeEventListener("storage", refreshBrowserSnapshot);
+      window.removeEventListener(WORKSPACE_STORAGE_EVENT, refreshBrowserState);
+      window.removeEventListener(BRIDGE_STORAGE_EVENT, refreshBrowserState);
+      window.removeEventListener(WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT, refreshBrowserState);
+      window.removeEventListener(PINNED_PAGES_STORAGE_EVENT, refreshBrowserState);
+      window.removeEventListener(BROWSER_SYNC_BUFFER_EVENT, refreshBrowserState);
+      window.removeEventListener("storage", refreshBrowserState);
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function refreshDatabaseSnapshot() {
-      setDatabaseSnapshot((current) => ({
-        status: "loading",
-        fetchedAt: current.fetchedAt,
-        accountId: current.accountId,
-        error: null,
-        raw: current.raw,
-        snapshot: current.snapshot,
-      }));
-
-      const nextSnapshot = await loadDatabaseSnapshot();
-      if (!cancelled) {
-        setDatabaseSnapshot(nextSnapshot);
-      }
-    }
-
-    void refreshDatabaseSnapshot();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function handleRefresh() {
-    setBrowserSnapshot(buildBrowserSnapshot());
+  async function refreshDatabaseSnapshot() {
     setDatabaseSnapshot((current) => ({
       status: "loading",
       fetchedAt: current.fetchedAt,
@@ -629,6 +289,67 @@ export function SyncStatView() {
       snapshot: current.snapshot,
     }));
     setDatabaseSnapshot(await loadDatabaseSnapshot());
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initialLoad() {
+      const nextSnapshot = await loadDatabaseSnapshot();
+      if (!cancelled) {
+        setDatabaseSnapshot(nextSnapshot);
+      }
+    }
+
+    void initialLoad();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleRefresh() {
+    setBrowserSnapshot(buildBrowserSnapshot());
+    setBufferedPayload(loadBufferedSyncPayload());
+    await refreshDatabaseSnapshot();
+  }
+
+  async function handleEmergencyPush() {
+    const payload = bufferedPayload ?? buildBrowserSyncPayload();
+    if (!payload) {
+      setPushState({
+        status: "error",
+        message: "No browser changes are available to push right now.",
+      });
+      return;
+    }
+
+    setPushState({
+      status: "pushing",
+      message: "Pushing browser changes to the database...",
+    });
+
+    try {
+      await flushSyncSnapshot(payload);
+      clearBufferedSyncPayload();
+      clearPersistentBrowserStores();
+      setPushState({
+        status: "success",
+        message: "Browser changes were pushed to the database.",
+      });
+      await handleRefresh();
+    } catch (error) {
+      const message =
+        error instanceof SyncApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Failed to push browser changes to the database.";
+      setPushState({
+        status: "error",
+        message,
+      });
+    }
   }
 
   const diffCollections: DiffCollection[] = databaseSnapshot.snapshot
@@ -663,25 +384,35 @@ export function SyncStatView() {
               Sync Status
             </h1>
             <p className="max-w-3xl text-[0.9rem] leading-[1.5] text-muted-foreground">
-              Inspect the browser snapshot that will be synced and compare it with the current
-              database state returned from the split sync APIs.
+              Inspect the live browser cache, the pending offline sync buffer, and the current
+              database snapshot. The push action is only here as an emergency manual sync.
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => void handleRefresh()}
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-[0.86rem] font-semibold text-foreground transition hover:border-foreground/20"
-        >
-          {databaseSnapshot.status === "loading" ? "Refreshing..." : "Refresh snapshots"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => void handleEmergencyPush()}
+            disabled={pushState.status === "pushing"}
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-[0.86rem] font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+          >
+            {pushState.status === "pushing" ? "Pushing..." : "Push changes to database"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleRefresh()}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-[0.86rem] font-semibold text-foreground transition hover:border-foreground/20"
+          >
+            {databaseSnapshot.status === "loading" ? "Refreshing..." : "Refresh snapshots"}
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-4">
         <section className="rounded-2xl border border-border bg-background p-5">
           <p className="text-[0.78rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            Browser
+            Browser Cache
           </p>
           <div className="mt-3 grid gap-2 text-[0.88rem]">
             <p>Workspaces: <span className="font-semibold text-foreground">{browserSnapshot.workspaces.length}</span></p>
@@ -689,8 +420,26 @@ export function SyncStatView() {
             <p>Blocks: <span className="font-semibold text-foreground">{browserSnapshot.blocks.length}</span></p>
             <p>Bridges: <span className="font-semibold text-foreground">{browserSnapshot.bridges.length}</span></p>
             <p>Pinned configs: <span className="font-semibold text-foreground">{browserSnapshot.pinnedPages.length}</span></p>
+            <p className="text-muted-foreground">Generated: {formatTimestamp(browserSnapshot.generatedAt)}</p>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-background p-5">
+          <p className="text-[0.78rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            Offline Buffer
+          </p>
+          <div className="mt-3 grid gap-2 text-[0.88rem]">
+            <p>
+              Status:{" "}
+              <span className="font-semibold text-foreground">
+                {bufferedPayload ? "Pending browser changes" : "Empty"}
+              </span>
+            </p>
             <p className="text-muted-foreground">
-              Generated from browser storage: {formatTimestamp(browserSnapshot.generatedAt)}
+              Buffered at: {formatTimestamp(bufferedPayload?.bufferedAt ?? null)}
+            </p>
+            <p className="text-muted-foreground">
+              This persistent browser copy only exists for unsynced edits and offline recovery.
             </p>
           </div>
         </section>
@@ -705,9 +454,7 @@ export function SyncStatView() {
             <p>Blocks: <span className="font-semibold text-foreground">{databaseSnapshot.snapshot?.blocks.length ?? 0}</span></p>
             <p>Bridges: <span className="font-semibold text-foreground">{databaseSnapshot.snapshot?.bridges.length ?? 0}</span></p>
             <p>Pinned configs: <span className="font-semibold text-foreground">{databaseSnapshot.snapshot?.pinnedPages.length ?? 0}</span></p>
-            <p className="text-muted-foreground">
-              Last fetch: {formatTimestamp(databaseSnapshot.fetchedAt)}
-            </p>
+            <p className="text-muted-foreground">Last fetch: {formatTimestamp(databaseSnapshot.fetchedAt)}</p>
             {databaseSnapshot.accountId ? (
               <p className="text-muted-foreground">Account: {databaseSnapshot.accountId}</p>
             ) : null}
@@ -734,13 +481,26 @@ export function SyncStatView() {
               </span>
             </p>
             <p className="text-muted-foreground">
-              Browser-only storage not synced to the DB: {Object.keys(browserSnapshot.raw.bridgeRuns).length} bridge run record{Object.keys(browserSnapshot.raw.bridgeRuns).length === 1 ? "" : "s"}.
+              Browser-only bridge run history: {Object.keys(browserSnapshot.raw.bridgeRuns).length} record{Object.keys(browserSnapshot.raw.bridgeRuns).length === 1 ? "" : "s"}.
             </p>
             {browserSnapshot.warning ? (
               <p className="text-amber-700">{browserSnapshot.warning}</p>
             ) : null}
             {databaseSnapshot.error ? (
               <p className="text-rose-600">{databaseSnapshot.error}</p>
+            ) : null}
+            {pushState.message ? (
+              <p
+                className={
+                  pushState.status === "error"
+                    ? "text-rose-600"
+                    : pushState.status === "success"
+                      ? "text-emerald-700"
+                      : "text-muted-foreground"
+                }
+              >
+                {pushState.message}
+              </p>
             ) : null}
           </div>
         </section>
@@ -777,24 +537,21 @@ export function SyncStatView() {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-3">
         <SnapshotPanel
           title="Browser source stores"
-          subtitle="Loaded from browser storage for this session, including session-backed pinned pages."
+          subtitle="Current in-session browser cache used by the app."
           data={browserSnapshot.raw}
         />
         <SnapshotPanel
+          title="Pending offline buffer"
+          subtitle="Persistent browser payload kept only until it reaches the database."
+          data={bufferedPayload}
+        />
+        <SnapshotPanel
           title="Browser sync payload"
-          subtitle="Derived snapshot that this browser would sync upstream."
-          data={{
-            generatedAt: browserSnapshot.generatedAt,
-            warning: browserSnapshot.warning,
-            workspaces: browserSnapshot.workspaces,
-            pages: browserSnapshot.pages,
-            blocks: browserSnapshot.blocks,
-            bridges: browserSnapshot.bridges,
-            pinnedPages: browserSnapshot.pinnedPages,
-          }}
+          subtitle="Derived payload the browser would push upstream right now."
+          data={buildBrowserSyncPayload()}
         />
       </div>
 

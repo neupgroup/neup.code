@@ -1505,7 +1505,9 @@ function getPageBlocksSnapshot(pageKey: WorkspacePageKey) {
     return SERVER_PAGE_BLOCKS_SNAPSHOT[pageKey];
   }
 
-  const raw = window.localStorage.getItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY);
+  const raw =
+    window.sessionStorage.getItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY) ??
+    window.localStorage.getItem(WORKSPACE_PAGE_BLOCKS_STORAGE_KEY);
   if (pageBlocksSnapshotCache?.raw === raw) {
     return pageBlocksSnapshotCache.snapshots[pageKey];
   }

@@ -57,6 +57,11 @@ let bridgesSnapshotCache:
     }
   | null = null;
 
+function readBridgeStorageRaw() {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(BRIDGE_STORAGE_KEY) ?? window.localStorage.getItem(BRIDGE_STORAGE_KEY);
+}
+
 export type BridgeRunRecord = {
   bridgeId: string;
   status: "idle" | "running" | "success" | "error";
@@ -140,7 +145,7 @@ export function loadBridges(): BridgeItem[] {
   if (typeof window === "undefined") return SERVER_BRIDGES_SNAPSHOT;
 
   try {
-    const raw = window.localStorage.getItem(BRIDGE_STORAGE_KEY);
+    const raw = readBridgeStorageRaw();
     if (bridgesSnapshotCache?.raw === raw) {
       return bridgesSnapshotCache.items;
     }
@@ -157,7 +162,8 @@ export function loadBridges(): BridgeItem[] {
 export function saveBridges(items: BridgeItem[]) {
   if (typeof window === "undefined") return;
   const raw = JSON.stringify(items);
-  window.localStorage.setItem(BRIDGE_STORAGE_KEY, raw);
+  window.sessionStorage.setItem(BRIDGE_STORAGE_KEY, raw);
+  window.localStorage.removeItem(BRIDGE_STORAGE_KEY);
   bridgesSnapshotCache = {
     raw,
     items: normalizeBridgeItems(items),
