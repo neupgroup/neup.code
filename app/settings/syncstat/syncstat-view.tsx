@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { SyncApiError, loadSyncSnapshot } from "@/services/sync-client";
 import {
   BRIDGE_STORAGE_EVENT,
   loadBridgeRuns,
@@ -522,32 +523,7 @@ async function loadDatabaseSnapshot(): Promise<DatabaseSnapshotState> {
   const fetchedAt = new Date().toISOString();
 
   try {
-    const response = await fetch("/api/state", {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-
-    const data = (await response.json()) as unknown;
-
-    if (!response.ok) {
-      const message =
-        data && typeof data === "object" && "error" in data && typeof data.error === "string"
-          ? data.error
-          : `Request failed with status ${response.status}.`;
-
-      return {
-        status: "error",
-        fetchedAt,
-        accountId: null,
-        error: message,
-        raw: data,
-        snapshot: null,
-      };
-    }
-
+    const data = await loadSyncSnapshot();
     if (!isDatabaseResponse(data)) {
       return {
         status: "error",
@@ -568,12 +544,18 @@ async function loadDatabaseSnapshot(): Promise<DatabaseSnapshotState> {
       snapshot: normalizeDatabaseResponse(data),
     };
   } catch (error) {
+    const message =
+      error instanceof SyncApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : "Failed to load the database snapshot.";
     return {
       status: "error",
       fetchedAt,
       accountId: null,
-      error: error instanceof Error ? error.message : "Failed to load the database snapshot.",
-      raw: null,
+      error: message,
+      raw: error instanceof SyncApiError ? error.data : null,
       snapshot: null,
     };
   }
@@ -682,7 +664,7 @@ export function SyncStatView() {
             </h1>
             <p className="max-w-3xl text-[0.9rem] leading-[1.5] text-muted-foreground">
               Inspect the browser snapshot that will be synced and compare it with the current
-              database state returned from <code>/api/state</code>.
+              database state returned from the split sync APIs.
             </p>
           </div>
         </div>
@@ -819,7 +801,7 @@ export function SyncStatView() {
       <div className="grid gap-4 xl:grid-cols-2">
         <SnapshotPanel
           title="Database sync snapshot"
-          subtitle="Normalized comparison view from /api/state."
+          subtitle="Normalized comparison view aggregated from the split sync endpoints."
           data={{
             fetchedAt: databaseSnapshot.fetchedAt,
             accountId: databaseSnapshot.accountId,
@@ -828,7 +810,7 @@ export function SyncStatView() {
         />
         <SnapshotPanel
           title="Raw database response"
-          subtitle="Unmodified response body returned by /api/state."
+          subtitle="Combined response shape assembled from the split sync endpoints."
           data={databaseSnapshot.raw}
         />
       </div>

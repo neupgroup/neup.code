@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { SyncApiError, flushSyncSnapshot, loadSyncSnapshot } from "@/services/sync-client";
 import {
   BRIDGE_STORAGE_EVENT,
   loadBridges,
@@ -658,24 +659,15 @@ export function StateSync() {
 
     flushInFlightRef.current = true;
     try {
-      const response = await fetch("/api/state", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed),
-      });
-
-      const json = (await response.json().catch(() => null)) as unknown;
-      if (response.ok && isRecord(json) && json.ok === true) {
-        window.localStorage.removeItem(VARIABLES_STORAGE_KEY);
-        retryAtRef.current = 0;
-      }
-      if (response.status === 401) {
+      await flushSyncSnapshot(parsed);
+      window.localStorage.removeItem(VARIABLES_STORAGE_KEY);
+      retryAtRef.current = 0;
+    } catch (error) {
+      if (error instanceof SyncApiError && error.status === 401) {
         retryAtRef.current = Date.now() + 5 * 60_000;
-      } else if (!response.ok) {
+      } else {
         retryAtRef.current = Date.now() + 30_000;
       }
-    } catch {
-      retryAtRef.current = Date.now() + 30_000;
     } finally {
       flushInFlightRef.current = false;
       if (flushAgainRef.current) {
@@ -720,28 +712,24 @@ export function StateSync() {
       const bufferedPayload = isPayloadV3(bufferedParsed) ? bufferedParsed : null;
 
       try {
-        const response = await fetch("/api/state", { method: "GET", cache: "no-store" });
-        const json = (await response.json().catch(() => null)) as unknown;
+        const snapshot = await loadSyncSnapshot();
         if (cancelled) return;
 
-        if (response.status === 401) {
+        suppressBufferRef.current = true;
+        applyServerSnapshot(snapshot as ServerSnapshot);
+        if (bufferedPayload) {
+          applyServerSnapshot(payloadToSnapshotLike(bufferedPayload));
+        }
+        suppressBufferRef.current = false;
+
+        if (bufferedPayload) {
+          scheduleFlush();
+        }
+        return;
+      } catch (error) {
+        if (error instanceof SyncApiError && error.status === 401) {
           return;
         }
-
-        if (response.ok && isRecord(json) && json.ok === true) {
-          suppressBufferRef.current = true;
-          applyServerSnapshot(json as ServerSnapshot);
-          if (bufferedPayload) {
-            applyServerSnapshot(payloadToSnapshotLike(bufferedPayload));
-          }
-          suppressBufferRef.current = false;
-
-          if (bufferedPayload) {
-            scheduleFlush();
-          }
-          return;
-        }
-      } catch {
         // Ignore bootstrap errors; we'll still seed server if needed.
       }
 
