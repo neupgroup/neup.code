@@ -40,6 +40,15 @@ export default function SettingsPage() {
             Export your saved workspace docs, bridges, and components as Markdown in a zip archive.
           </p>
         </Link>
+        <Link
+          href="/settings/syncstat"
+          className="rounded-xl border border-border bg-background p-4 transition hover:border-foreground/20"
+        >
+          <p className="text-[0.96rem] font-semibold text-foreground">Sync Status</p>
+          <p className="mt-1 text-[0.86rem] text-muted-foreground">
+            Compare browser-stored data with the current database snapshot returned by the sync API.
+          </p>
+        </Link>
       </div>
     </section>
   );
