@@ -11,3 +11,97 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Account {
+  id         String      @id @map("id")
+  workspaces Workspace[]
+
+  @@map("accounts")
+}
+
+model Workspace {
+  id          String          @id @map("id")
+  accountId   String          @map("account_id")
+  name        String          @map("name")
+  permit      String          @default("owner") @map("permit")
+  description String          @default("") @map("description")
+  sharedWith  String[]        @default([]) @map("shared_with")
+  isHidden    Boolean         @default(false) @map("is_hidden")
+  isDefault   Boolean         @default(false) @map("is_default")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  account     Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  pages       Page[]
+  bridges     BridgeResource[]
+
+  @@index([accountId])
+  @@map("workspace")
+}
+
+model Page {
+  id          String      @id @map("id")
+  workspaceId String      @map("workspace_id")
+  title       String      @map("title")
+  icon        String?     @db.VarChar(256) @map("icon")
+  cover       String?     @map("cover")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  blocks      PageBlock[]
+  history     History[]
+
+  @@index([workspaceId])
+  @@map("pages")
+}
+
+model PageBlock {
+  id        String   @id @map("id")
+  pageId    String   @map("page_id")
+  kind      String   @map("kind")
+  content   String   @default("") @map("content")
+  position  Int      @map("position")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+  @@index([pageId, position])
+  @@map("page_blocks")
+}
+
+model BridgeResource {
+  id               String    @id @map("id")
+  workspaceId      String    @map("workspace_id")
+  name             String    @default("") @map("name")
+  bridgeType       String    @map("bridge_type")
+  endpoint         String    @default("") @map("endpoint")
+  environment      String    @default("development") @map("environment")
+  method           String?   @map("method")
+  apiConfig        Json?     @map("api_config")
+  requiredFields   Json?     @map("required_fields")
+  serviceName      String?   @map("service_name")
+  secret           String?   @map("secret")
+  isPrivateInternal Boolean  @default(false) @map("is_private_internal")
+  privateNote      String?   @map("private_note")
+  publicNote       String?   @map("public_note")
+  notes            String?   @map("notes")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("bridges")
+}
+
+model History {
+  id        String   @id @map("id")
+  pageId    String   @map("page_id")
+  timestamp DateTime @default(now()) @map("timestamp")
+  changes   Json     @map("changes")
+  by        String   @map("by")
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+  @@index([by])
+  @@map("history")
+}

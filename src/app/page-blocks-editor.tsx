@@ -1529,12 +1529,25 @@ function getChapterBlocksSnapshot(
   bridges: BridgeItem[],
   chapterId: string,
 ) {
-  return ensureTrailingNote(
-    bridges
-      .filter((item) => item.parentChapterId === chapterId)
-      .map((item) => bridgeItemToPageBlock(item)),
-    "bridge",
-  );
+  const blocks = bridges
+    .filter((item) => item.parentChapterId === chapterId)
+    .map((item) => bridgeItemToPageBlock(item));
+
+  if (!blocks.length || blocks[blocks.length - 1]?.kind !== "note") {
+    const createdAt = typeof window === "undefined" ? "0" : new Date().toISOString();
+    return [
+      ...blocks,
+      {
+        id: `draft-${chapterId}-note`,
+        pageKey: "bridge",
+        kind: "note",
+        content: "",
+        createdAt,
+      },
+    ];
+  }
+
+  return blocks;
 }
 
 function getStaticBlockHref(block: WorkspacePageBlock) {

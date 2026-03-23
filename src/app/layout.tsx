@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import Link from "next/link";
 import { SidebarNav } from "./sidebar-nav";
+import { StateSync } from "./state-sync";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -26,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`h-full ${dmSans.variable}`}>
       <body className="min-h-screen bg-background text-foreground font-sans antialiased selection:bg-primary selection:text-primary-foreground">
+        <StateSync />
         <div className="min-h-screen">
           <header className="sticky top-0 z-40 bg-background shadow-[0_8px_22px_rgba(15,23,42,0.12)]">
             <div className="content-container flex h-[68px] items-center justify-between gap-4 px-5 sm:px-6 lg:px-8">
