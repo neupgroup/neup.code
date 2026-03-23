@@ -1528,7 +1528,7 @@ function getPageBlocksSnapshot(pageKey: WorkspacePageKey) {
 function getChapterBlocksSnapshot(
   bridges: BridgeItem[],
   chapterId: string,
-) {
+): WorkspacePageBlock[] {
   const blocks = bridges
     .filter((item) => item.parentChapterId === chapterId)
     .map((item) => bridgeItemToPageBlock(item));

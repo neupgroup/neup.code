@@ -131,6 +131,28 @@ type ServerSnapshot = {
   }>;
 };
 
+const BRIDGE_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const BRIDGE_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+
+function normalizeBridgeEnvironment(value: string | null | undefined): BridgeItem["environment"] {
+  if (value && BRIDGE_ENVIRONMENTS.includes(value as BridgeItem["environment"])) {
+    return value as BridgeItem["environment"];
+  }
+
+  return "development";
+}
+
+function normalizeBridgeMethod(
+  value: string | null | undefined,
+  fallback?: BridgeItem["method"],
+): BridgeItem["method"] {
+  if (value && BRIDGE_HTTP_METHODS.includes(value as NonNullable<BridgeItem["method"]>)) {
+    return value as BridgeItem["method"];
+  }
+
+  return fallback;
+}
+
 function getDefaultWorkspaceId(workspaces: WorkspaceItem[]) {
   return workspaces.find((ws) => ws.isDefault)?.id ?? workspaces[0]?.id ?? null;
 }
@@ -432,8 +454,8 @@ function applyServerSnapshot(snapshot: ServerSnapshot) {
           parentChapterId: pageId,
           bridgeType: block.kind,
           endpoint: bridge?.endpoint ?? "",
-          environment: (bridge?.environment as any) ?? "development",
-          method: bridge?.method ?? (block.kind === "api" ? "GET" : undefined),
+          environment: normalizeBridgeEnvironment(bridge?.environment),
+          method: normalizeBridgeMethod(bridge?.method, block.kind === "api" ? "GET" : undefined),
           apiConfig: (bridge as any)?.apiConfig,
           requiredFields: (bridge as any)?.requiredFields,
           serviceName: (bridge as any)?.serviceName ?? undefined,

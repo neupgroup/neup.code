@@ -1,5 +1,5 @@
-@config "../../tailwind.config.mjs";
-@import "tailwindcss/index.css";
+@config "../tailwind.config.mjs";
+@import "tailwindcss";
 
 @layer base {
   :root {

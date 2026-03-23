@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import Link from "next/link";
+import { Suspense } from "react";
 import { SidebarNav } from "./sidebar-nav";
 import { StateSync } from "./state-sync";
 import "./globals.css";
@@ -47,7 +48,9 @@ export default function RootLayout({
           <div className="content-container">
             <div className="grid min-w-[980px] grid-cols-[242px_minmax(0,1fr)]">
               <aside className="sticky top-[68px] h-[calc(100vh-68px)] self-start overflow-y-auto border-r border-border bg-background px-4 py-6">
-                <SidebarNav />
+                <Suspense fallback={null}>
+                  <SidebarNav />
+                </Suspense>
               </aside>
 
               <main className="bg-background px-6 py-7 lg:px-9 lg:py-8">

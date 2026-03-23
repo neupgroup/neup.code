@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/prisma/generated/client";
 import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
@@ -76,6 +77,16 @@ function parseDate(value: unknown) {
   if (typeof value !== "string") return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toBridgeJsonField(
+  value: unknown,
+): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput {
+  if (isRecord(value) || Array.isArray(value)) {
+    return value as Prisma.InputJsonValue;
+  }
+
+  return Prisma.DbNull;
 }
 
 async function requireAccountId() {
@@ -419,8 +430,8 @@ export async function POST(request: Request) {
             endpoint: bridge.endpoint,
             environment: bridge.environment,
             method: bridge.method ?? null,
-            apiConfig: isRecord(bridge.apiConfig) || Array.isArray(bridge.apiConfig) ? bridge.apiConfig : null,
-            requiredFields: isRecord(bridge.requiredFields) || Array.isArray(bridge.requiredFields) ? bridge.requiredFields : null,
+            apiConfig: toBridgeJsonField(bridge.apiConfig),
+            requiredFields: toBridgeJsonField(bridge.requiredFields),
             serviceName: bridge.serviceName ?? null,
             secret: bridge.secret ?? null,
             isPrivateInternal: bridge.isPrivateInternal ?? false,
@@ -436,8 +447,8 @@ export async function POST(request: Request) {
             endpoint: bridge.endpoint,
             environment: bridge.environment,
             method: bridge.method ?? null,
-            apiConfig: isRecord(bridge.apiConfig) || Array.isArray(bridge.apiConfig) ? bridge.apiConfig : null,
-            requiredFields: isRecord(bridge.requiredFields) || Array.isArray(bridge.requiredFields) ? bridge.requiredFields : null,
+            apiConfig: toBridgeJsonField(bridge.apiConfig),
+            requiredFields: toBridgeJsonField(bridge.requiredFields),
             serviceName: bridge.serviceName ?? null,
             secret: bridge.secret ?? null,
             isPrivateInternal: bridge.isPrivateInternal ?? false,
