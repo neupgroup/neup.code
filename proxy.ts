@@ -9,7 +9,7 @@ function hasAuthCookies(request: NextRequest) {
   });
 }
 
-export default function middleware(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   // Is it an API request to the bridge? If so, we want to return a 401 if the auth cookies are missing.
   if (!request.nextUrl.pathname.startsWith('/bridge/')) {
 
