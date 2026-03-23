@@ -10,20 +10,18 @@ function hasAuthCookies(request: NextRequest) {
 }
 
 export default function proxy(request: NextRequest) {
-  // Is it an API request to the bridge? If so, we want to return a 401 if the auth cookies are missing.
-  if (!request.nextUrl.pathname.startsWith('/bridge/')) {
-
-    // Check if the required auth cookies are present. If so, allow the request to proceed. Otherwise, redirect to the auth start page.
-    if (hasAuthCookies(request)) {
-      return NextResponse.next();
-    } else {
-      return NextResponse.redirect(new URL('https://neupgroup.com/account/auth/start?appid=neupcode&redirectsTo=' + encodeURIComponent(request.nextUrl.href)));
-    }
+  if (hasAuthCookies(request)) {
+    return NextResponse.next();
   }
 
+  return NextResponse.redirect(
+    new URL(
+      'https://neupgroup.com/account/auth/start?appid=neupcode&redirectsTo=' +
+        encodeURIComponent(request.nextUrl.href),
+    ),
+  );
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)'],
 };
-
