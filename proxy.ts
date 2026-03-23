@@ -17,7 +17,7 @@ export default function proxy(request: NextRequest) {
     if (hasAuthCookies(request)) {
       return NextResponse.next();
     } else {
-      return NextResponse.redirect(new URL('https://neupgroup.com/account/auth/start'));
+      return NextResponse.redirect(new URL('https://neupgroup.com/account/auth/start?appid=neupcode&redirectsTo=' + encodeURIComponent(request.nextUrl.href)));
     }
   }
 
