@@ -1,3 +1,4 @@
+import { fetchRequest } from "@/functions/request";
 import type {
   SyncBlocksRequest,
   SyncBridgesRequest,
@@ -26,7 +27,7 @@ export class SyncApiError extends Error {
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await fetchRequest(url, init);
   const data = (await response.json().catch(() => null)) as unknown;
 
   if (!response.ok) {
