@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ContextMenuInterface,
+  type ContextMenuItem,
+} from "../../../components/editor/context-menu-interface";
 import { BridgeTypeBlock } from "../../../components/editor/blocks/bridge/bridge-type-block";
 import {
   BRIDGE_RUN_STORAGE_KEY,
@@ -1005,6 +1009,51 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   const backLabel = parentBridge ? parentBridge.name : "Bridge";
   const contextBlock = getContextBlock();
   const deleteChapterBlocks = chapterBlocks.filter((item) => deleteChapterBlockIds.includes(item.id));
+  const contextMenuItems: ContextMenuItem[] = contextBlock
+    ? (() => {
+        const actionTargets = getActionTargetBlocks(contextBlock.id);
+        const actionCount = actionTargets.length;
+
+        return [
+          {
+            id: "cut",
+            label: actionCount > 1 ? `Cut ${actionCount} items` : "Cut",
+            sectionTitle: "Block",
+          },
+          {
+            id: "copy",
+            label: actionCount > 1 ? `Copy ${actionCount} items` : "Copy",
+            sectionTitle: "Block",
+          },
+          {
+            id: "delete",
+            label: actionCount > 1 ? `Delete ${actionCount} items` : "Delete",
+            sectionTitle: "Block",
+            tone: "danger",
+          },
+          ...(contextBlock.entryKind === "bridge" || contextBlock.entryKind === "note"
+            ? [
+                {
+                  id: "duplicate",
+                  label: "Duplicate",
+                  sectionTitle: "Block",
+                } satisfies ContextMenuItem,
+              ]
+            : []),
+        ];
+      })()
+    : [
+        {
+          id: "paste",
+          label: clipboard?.items.length
+            ? clipboard.items.length === 1
+              ? `Paste ${clipboard.items[0]?.name ?? "block"}`
+              : `Paste ${clipboard.items.length} blocks`
+            : "Paste",
+          sectionTitle: "Block",
+          disabled: !clipboard?.items.length,
+        },
+      ];
 
   function focusPreviousChildNote(noteId: string) {
     const currentIndex = chapterBlocks.findIndex((item) => item.id === noteId);
@@ -1455,7 +1504,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
         {contextMenu && bridge.entryKind === "chapter" ? (
           <div
             ref={contextMenuRef}
-            className="fixed z-50 min-w-[180px] rounded-xl border border-border bg-background p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)]"
+            className="fixed z-50"
             style={
               contextMenuPosition
                 ? { left: contextMenuPosition.left, top: contextMenuPosition.top }
@@ -1463,62 +1512,38 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
             }
             onClick={(event) => event.stopPropagation()}
           >
-            {contextBlock ? (
-              <div className="grid gap-1">
-                {(() => {
-                  const actionTargets = getActionTargetBlocks(contextBlock.id);
-                  const actionCount = actionTargets.length;
+            <ContextMenuInterface
+              className="w-[264px]"
+              items={contextMenuItems}
+              maxVisibleItems={4}
+              onSelectItem={(item) => {
+                if (item.id === "paste") {
+                  pasteIntoChapter();
+                  return;
+                }
 
-                  return (
-                    <>
-                <button
-                  type="button"
-                  onClick={() => handleCutBlock(contextBlock.id)}
-                  className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted"
-                >
-                  {actionCount > 1 ? `Cut ${actionCount} items` : "Cut"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCopyBlock(contextBlock.id)}
-                  className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted"
-                >
-                  {actionCount > 1 ? `Copy ${actionCount} items` : "Copy"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openDeleteBlocksDialog(contextBlock.id)}
-                  className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-rose-600 transition hover:bg-rose-50"
-                >
-                  {actionCount > 1 ? `Delete ${actionCount} items` : "Delete"}
-                </button>
-                {contextBlock.entryKind === "bridge" || contextBlock.entryKind === "note" ? (
-                  <button
-                    type="button"
-                    onClick={() => handleDuplicateBlock(contextBlock)}
-                    className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted"
-                  >
-                    Duplicate
-                  </button>
-                ) : null}
-                    </>
-                  );
-                })()}
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={pasteIntoChapter}
-                disabled={!clipboard?.items.length}
-                className="flex w-full rounded-lg px-3 py-2 text-left text-[0.84rem] font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {clipboard?.items.length
-                  ? clipboard.items.length === 1
-                    ? `Paste ${clipboard.items[0]?.name ?? "block"}`
-                    : `Paste ${clipboard.items.length} blocks`
-                  : "Paste"}
-              </button>
-            )}
+                if (!contextBlock) return;
+
+                if (item.id === "cut") {
+                  handleCutBlock(contextBlock.id);
+                  return;
+                }
+
+                if (item.id === "copy") {
+                  handleCopyBlock(contextBlock.id);
+                  return;
+                }
+
+                if (item.id === "delete") {
+                  openDeleteBlocksDialog(contextBlock.id);
+                  return;
+                }
+
+                if (item.id === "duplicate") {
+                  handleDuplicateBlock(contextBlock);
+                }
+              }}
+            />
           </div>
         ) : null}
       </section>

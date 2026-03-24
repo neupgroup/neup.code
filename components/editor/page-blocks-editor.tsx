@@ -8,13 +8,15 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ActionMenu, type ActionMenuItem } from "./action-menu";
+import {
+  ContextMenuInterface,
+  type ContextMenuItem,
+} from "./context-menu-interface";
 import {
   type ActionMenuState,
   type BlockActionContext,
   type BlockActionTrigger,
 } from "./block-action-context";
-import * as blockActionUtils from "./block-actions";
 import {
   canMoveBlock,
   DRAG_START_THRESHOLD,
@@ -33,6 +35,11 @@ import {
   isTextBlockKind,
   slashCommandToKind,
 } from "./command-blocks";
+import { getRightClickCommandDefinitions, getRightClickMenuItems } from "./right-click-commands";
+import {
+  getSlashCommandDefinitions,
+  getSlashCommands as getSlashCommandsFromDefinitions,
+} from "./slash-commands";
 import { copyBlocksToClipboard as copyBlocksToClipboardBehavior } from "./behavior/copy-blocks";
 import { removeBlocksById } from "./behavior/cut-blocks";
 import { moveBlockInDirection } from "./behavior/move-block";
@@ -635,12 +642,13 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
   const actionMenuBlock = actionMenuState
     ? blocks.find((block) => block.id === actionMenuState.blockId)
     : null;
-  const blockActionDefinitions = blockActionUtils.getBlockActionDefinitions({
+  const rightClickCommandDefinitions = getRightClickCommandDefinitions({
     blocks,
     canMoveBlock,
     isTextBlockKind,
     pageKey,
   });
+  const slashCommandDefinitions = getSlashCommandDefinitions(pageKey);
 
   function getActionContext(
     block: WorkspacePageBlock,
@@ -659,14 +667,14 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     block: WorkspacePageBlock,
     trigger: BlockActionTrigger,
     showTextActions = false,
-  ): ActionMenuItem[] {
+  ): ContextMenuItem[] {
     const context = getActionContext(block, trigger, showTextActions);
-    return blockActionUtils.getActionMenuItems(blockActionDefinitions, context);
+    return getRightClickMenuItems(rightClickCommandDefinitions, context);
   }
 
   function getSlashCommands(block: WorkspacePageBlock): SlashCommand[] {
     const context = getActionContext(block, "slash");
-    return blockActionUtils.getSlashCommands(blockActionDefinitions, context);
+    return getSlashCommandsFromDefinitions(slashCommandDefinitions, context);
   }
 
   function runDocAction(actionId: string, context: BlockActionContext) {
@@ -968,7 +976,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       {actionMenuState && actionMenuBlock ? (
         <div
           ref={actionMenuRef}
-          className="fixed z-50 min-w-[220px]"
+          className="fixed z-50"
           style={
             actionMenuPosition
               ? { left: actionMenuPosition.left, top: actionMenuPosition.top }
@@ -976,8 +984,10 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
           }
           onClick={(event) => event.stopPropagation()}
         >
-          <ActionMenu
+          <ContextMenuInterface
+            className="w-[264px]"
             items={actionMenuItems}
+            maxVisibleItems={4}
             onSelectItem={(item) => {
               if (!actionMenuBlock || !actionMenuState) return;
 
@@ -986,7 +996,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
                 actionMenuState.trigger,
                 actionMenuState.showTextActions,
               );
-              const definition = blockActionDefinitions.find((action) => action.id === item.id);
+              const definition = rightClickCommandDefinitions.find((action) => action.id === item.id);
 
               if (!definition) return;
               void runDocAction(definition.id, context);

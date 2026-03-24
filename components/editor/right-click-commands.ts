@@ -1,28 +1,10 @@
-import type { ActionMenuItem } from "./action-menu";
-import type {
-  BlockActionContext,
-  BlockActionTrigger,
-} from "./block-action-context";
+import type { WorkspacePageBlock, WorkspacePageKey } from "../../app/page-blocks-storage";
+import type { BlockActionContext } from "./block-action-context";
+import type { BlockCommandDefinition } from "./block-command-definition";
+import type { ContextMenuItem } from "./context-menu-interface";
 import { getAddActionDefinitions } from "./command-blocks";
-import type { SlashCommand } from "./inline-note-block";
-import type {
-  WorkspacePageBlock,
-  WorkspacePageKey,
-} from "../../app/page-blocks-storage";
 
-export type BlockActionDefinition = {
-  id: string;
-  label: string;
-  description?: string;
-  keywords?: string[];
-  sectionTitle: string;
-  triggers: BlockActionTrigger[];
-  tone?: "default" | "danger";
-  isVisible?: (context: BlockActionContext) => boolean;
-  isDisabled?: (context: BlockActionContext) => boolean;
-};
-
-type GetBlockActionDefinitionsOptions = {
+type GetRightClickCommandDefinitionsOptions = {
   blocks: WorkspacePageBlock[];
   canMoveBlock: (
     blocks: WorkspacePageBlock[],
@@ -33,12 +15,12 @@ type GetBlockActionDefinitionsOptions = {
   pageKey: WorkspacePageKey;
 };
 
-export function getBlockActionDefinitions({
+export function getRightClickCommandDefinitions({
   blocks,
   canMoveBlock,
   isTextBlockKind,
   pageKey,
-}: GetBlockActionDefinitionsOptions): BlockActionDefinition[] {
+}: GetRightClickCommandDefinitionsOptions): BlockCommandDefinition[] {
   return [
     {
       id: "cut",
@@ -92,17 +74,17 @@ export function getBlockActionDefinitions({
     },
     ...getAddActionDefinitions(pageKey).map((definition) => ({
       ...definition,
-      triggers: ["slash", "context"] as BlockActionTrigger[],
+      triggers: ["context"] as const,
     })),
   ];
 }
 
-export function getActionMenuItems(
-  definitions: BlockActionDefinition[],
+export function getRightClickMenuItems(
+  definitions: BlockCommandDefinition[],
   context: BlockActionContext,
-): ActionMenuItem[] {
+): ContextMenuItem[] {
   return definitions
-    .filter((definition) => definition.triggers.includes(context.trigger))
+    .filter((definition) => definition.triggers.includes("context"))
     .filter((definition) => definition.isVisible?.(context) ?? true)
     .map((definition) => ({
       id: definition.id,
@@ -113,20 +95,3 @@ export function getActionMenuItems(
       disabled: definition.isDisabled?.(context) ?? false,
     }));
 }
-
-export function getSlashCommands(
-  definitions: BlockActionDefinition[],
-  context: BlockActionContext,
-): SlashCommand[] {
-  return definitions
-    .filter((definition) => definition.triggers.includes("slash"))
-    .filter((definition) => definition.isVisible?.(context) ?? true)
-    .map((definition) => ({
-      id: definition.id,
-      label: definition.label,
-      description: definition.description,
-      keywords: definition.keywords,
-      sectionTitle: definition.sectionTitle,
-    }));
-}
-

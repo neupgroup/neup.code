@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ActionMenu } from "./action-menu";
+import { ContextMenuInterface } from "./context-menu-interface";
 import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../../app/bridge/rich-text";
 
 export type SlashCommand = {
@@ -138,11 +138,6 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
   const visibleActiveCommandIndex = filteredCommands.length
     ? Math.min(activeCommandIndex, filteredCommands.length - 1)
     : 0;
-
-  const menuListMaxHeight =
-    maxVisibleCommands && maxVisibleCommands > 0
-      ? maxVisibleCommands * 64 + Math.max(0, maxVisibleCommands - 1) * 4
-      : null;
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -385,7 +380,7 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
       />
 
       {isSlashMenuOpen && filteredCommands.length ? (
-        <ActionMenu
+        <ContextMenuInterface
           ref={menuRef}
           items={filteredCommands.map((command) => ({
             id: command.id,
@@ -396,7 +391,8 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
           }))}
           activeItemId={filteredCommands[visibleActiveCommandIndex]?.id ?? null}
           itemRefs={commandItemRefs}
-          className="absolute z-40 w-[264px] overflow-y-auto pr-1"
+          className="absolute z-40 w-[264px]"
+          maxVisibleItems={maxVisibleCommands ?? 4}
           onSelectItem={(item) => {
             setDismissedSlashValue(value);
             onSelectCommand?.(item.id);
@@ -406,7 +402,6 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
               ? {
                   left: menuPosition.left,
                   top: menuPosition.top,
-                  maxHeight: menuListMaxHeight ?? undefined,
                 }
               : { left: -9999, top: -9999 }
           }
