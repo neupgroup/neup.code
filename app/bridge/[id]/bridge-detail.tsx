@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ContextMenuInterface,
   type ContextMenuItem,
 } from "../../../components/editor/context-menu-interface";
+import { TriggeredContextMenu } from "../../../components/editor/triggered-context-menu";
 import { BridgeTypeBlock } from "../../../components/editor/blocks/bridge/bridge-type-block";
 import {
   BRIDGE_RUN_STORAGE_KEY,
@@ -684,6 +684,19 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
       setContextMenu(null);
     }
 
+    function onScroll(event: Event) {
+      const target = event.target;
+      if (
+        contextMenuRef.current &&
+        target instanceof Node &&
+        contextMenuRef.current.contains(target)
+      ) {
+        return;
+      }
+
+      closeMenus();
+    }
+
     function onEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         closeMenus();
@@ -691,12 +704,12 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     }
 
     window.addEventListener("click", closeMenus);
-    window.addEventListener("scroll", closeMenus, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("keydown", onEscape);
 
     return () => {
       window.removeEventListener("click", closeMenus);
-      window.removeEventListener("scroll", closeMenus, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("keydown", onEscape);
     };
   }, []);
@@ -1502,49 +1515,42 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
         ) : null}
 
         {contextMenu && bridge.entryKind === "chapter" ? (
-          <div
+          <TriggeredContextMenu
             ref={contextMenuRef}
-            className="fixed z-50"
-            style={
-              contextMenuPosition
-                ? { left: contextMenuPosition.left, top: contextMenuPosition.top }
-                : { left: -9999, top: -9999 }
-            }
-            onClick={(event) => event.stopPropagation()}
-          >
-            <ContextMenuInterface
-              className="w-[264px]"
-              items={contextMenuItems}
-              maxVisibleItems={4}
-              onSelectItem={(item) => {
-                if (item.id === "paste") {
-                  pasteIntoChapter();
-                  return;
-                }
+            trigger="right-click"
+            className="w-[264px]"
+            position={contextMenuPosition}
+            items={contextMenuItems}
+            maxVisibleItems={4}
+            onDismiss={() => setContextMenu(null)}
+            onSelectItem={(item) => {
+              if (item.id === "paste") {
+                pasteIntoChapter();
+                return;
+              }
 
-                if (!contextBlock) return;
+              if (!contextBlock) return;
 
-                if (item.id === "cut") {
-                  handleCutBlock(contextBlock.id);
-                  return;
-                }
+              if (item.id === "cut") {
+                handleCutBlock(contextBlock.id);
+                return;
+              }
 
-                if (item.id === "copy") {
-                  handleCopyBlock(contextBlock.id);
-                  return;
-                }
+              if (item.id === "copy") {
+                handleCopyBlock(contextBlock.id);
+                return;
+              }
 
-                if (item.id === "delete") {
-                  openDeleteBlocksDialog(contextBlock.id);
-                  return;
-                }
+              if (item.id === "delete") {
+                openDeleteBlocksDialog(contextBlock.id);
+                return;
+              }
 
-                if (item.id === "duplicate") {
-                  handleDuplicateBlock(contextBlock);
-                }
-              }}
-            />
-          </div>
+              if (item.id === "duplicate") {
+                handleDuplicateBlock(contextBlock);
+              }
+            }}
+          />
         ) : null}
       </section>
   );

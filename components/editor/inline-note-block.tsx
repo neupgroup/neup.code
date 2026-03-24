@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ContextMenuInterface } from "./context-menu-interface";
+import { TriggeredContextMenu } from "./triggered-context-menu";
 import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../../app/bridge/rich-text";
 
 export type SlashCommand = {
@@ -108,18 +108,16 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
   const editorRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const savedSelectionRef = useRef<Range | null>(null);
+  const pendingSlashTriggerRangeRef = useRef<Range | null>(null);
+  const slashTriggerRangeRef = useRef<Range | null>(null);
   const commandItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
-  const [dismissedSlashValue, setDismissedSlashValue] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(null);
-  const slashMenuQuery = useMemo(() => getSlashQuery(value), [value]);
-  const slashQuery = slashMenuQuery ?? "";
-  const isSlashMenuOpen = Boolean(
-    slashMenuQuery !== null && commands.length && dismissedSlashValue !== value,
-  );
+  const [slashQuery, setSlashQuery] = useState<string | null>(null);
+  const isSlashMenuOpen = Boolean(slashQuery !== null && commands.length);
 
   const filteredCommands = useMemo(() => {
-    const normalizedQuery = slashQuery.trim().toLowerCase();
+    const normalizedQuery = (slashQuery ?? "").trim().toLowerCase();
 
     if (!normalizedQuery) return commands;
 
@@ -214,6 +212,34 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
     };
   }, [filteredCommands.length, isSlashMenuOpen, value]);
 
+  const dismissSlashMenu = useCallback(() => {
+    pendingSlashTriggerRangeRef.current = null;
+    slashTriggerRangeRef.current = null;
+    setSlashQuery(null);
+    setActiveCommandIndex(0);
+  }, []);
+
+  useEffect(() => {
+    if (!slashTriggerRangeRef.current) return;
+
+    function syncSlashQueryFromSelection() {
+      const nextSlashQuery = getActiveSlashQuery(editorRef.current, slashTriggerRangeRef.current);
+
+      if (nextSlashQuery === null) {
+        dismissSlashMenu();
+        return;
+      }
+
+      setSlashQuery(nextSlashQuery);
+    }
+
+    document.addEventListener("selectionchange", syncSlashQueryFromSelection);
+
+    return () => {
+      document.removeEventListener("selectionchange", syncSlashQueryFromSelection);
+    };
+  }, [dismissSlashMenu, value]);
+
   useEffect(() => {
     if (!autoFocus || !editorRef.current) return;
 
@@ -229,12 +255,27 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
 
   const syncValue = useCallback(() => {
     const nextValue = normalizeRichTextHtml(editorRef.current?.innerHTML ?? "");
-    if (dismissedSlashValue !== null && dismissedSlashValue !== nextValue) {
-      setDismissedSlashValue(null);
+
+    if (pendingSlashTriggerRangeRef.current) {
+      slashTriggerRangeRef.current = pendingSlashTriggerRangeRef.current;
+      pendingSlashTriggerRangeRef.current = null;
       setActiveCommandIndex(0);
     }
+
+    if (slashTriggerRangeRef.current) {
+      const nextSlashQuery = getActiveSlashQuery(editorRef.current, slashTriggerRangeRef.current);
+
+      if (nextSlashQuery === null) {
+        slashTriggerRangeRef.current = null;
+        setSlashQuery(null);
+        setActiveCommandIndex(0);
+      } else {
+        setSlashQuery(nextSlashQuery);
+      }
+    }
+
     onChange(nextValue);
-  }, [dismissedSlashValue, onChange]);
+  }, [onChange]);
 
   useImperativeHandle(
     ref,
@@ -290,7 +331,7 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
 
       if (event.key === "Escape") {
         event.preventDefault();
-        setDismissedSlashValue(value);
+        dismissSlashMenu();
         return;
       }
 
@@ -298,10 +339,24 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
         event.preventDefault();
         const selectedCommand = filteredCommands[visibleActiveCommandIndex];
         if (selectedCommand) {
-          setDismissedSlashValue(value);
+          dismissSlashMenu();
           onSelectCommand?.(selectedCommand.id);
         }
         return;
+      }
+    }
+
+    if (
+      event.key === "/" &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      editorRef.current
+    ) {
+      const selectionRange = getEditorSelectionRange(editorRef.current);
+
+      if (selectionRange && selectionRange.collapsed) {
+        pendingSlashTriggerRangeRef.current = selectionRange;
       }
     }
 
@@ -380,7 +435,8 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
       />
 
       {isSlashMenuOpen && filteredCommands.length ? (
-        <ContextMenuInterface
+        <TriggeredContextMenu
+          trigger="slash"
           ref={menuRef}
           items={filteredCommands.map((command) => ({
             id: command.id,
@@ -391,35 +447,19 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
           }))}
           activeItemId={filteredCommands[visibleActiveCommandIndex]?.id ?? null}
           itemRefs={commandItemRefs}
-          className="absolute z-40 w-[264px]"
+          className="w-[264px]"
+          position={menuPosition}
           maxVisibleItems={maxVisibleCommands ?? 4}
+          onDismiss={dismissSlashMenu}
           onSelectItem={(item) => {
-            setDismissedSlashValue(value);
+            dismissSlashMenu();
             onSelectCommand?.(item.id);
           }}
-          style={
-            menuPosition
-              ? {
-                  left: menuPosition.left,
-                  top: menuPosition.top,
-                }
-              : { left: -9999, top: -9999 }
-          }
         />
       ) : null}
     </div>
   );
 });
-
-function getSlashQuery(html: string) {
-  const plainText = richTextToPlainText(html);
-  if (!plainText.startsWith("/")) return null;
-
-  const query = plainText.slice(1);
-  if (query.includes(" ") || query.includes("\n")) return null;
-
-  return query;
-}
 
 function getEditorLineHeight(editor: HTMLDivElement | null) {
   if (!editor) return 24;
@@ -508,6 +548,38 @@ function getEditorSelectionRange(editor: HTMLDivElement | null) {
   }
 
   return range.cloneRange();
+}
+
+function getActiveSlashQuery(editor: HTMLDivElement | null, triggerRange: Range | null) {
+  if (!editor || !triggerRange) return null;
+
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount || !selection.isCollapsed) return null;
+
+  const caretRange = selection.getRangeAt(0);
+  if (!editor.contains(caretRange.startContainer)) return null;
+  if (!editor.contains(triggerRange.startContainer)) return null;
+
+  const caretPoint = caretRange.cloneRange();
+  caretPoint.collapse(true);
+  const triggerPoint = triggerRange.cloneRange();
+  triggerPoint.collapse(true);
+
+  if (caretPoint.compareBoundaryPoints(Range.START_TO_START, triggerPoint) < 0) {
+    return null;
+  }
+
+  const slashRange = document.createRange();
+  slashRange.setStart(triggerRange.startContainer, triggerRange.startOffset);
+  slashRange.setEnd(caretRange.startContainer, caretRange.startOffset);
+
+  const slashText = richTextToPlainText(fragmentToHtml(slashRange.cloneContents()));
+  if (!slashText.startsWith("/")) return null;
+
+  const query = slashText.slice(1);
+  if (/\s/.test(query)) return null;
+
+  return query;
 }
 
 function restoreSavedSelection(range: Range | null, editor: HTMLDivElement) {

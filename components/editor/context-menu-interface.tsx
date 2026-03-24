@@ -19,6 +19,7 @@ type ContextMenuInterfaceProps = {
   maxVisibleItems?: number;
   style?: CSSProperties;
   onSelectItem?: (item: ContextMenuItem, event: MouseEvent<HTMLButtonElement>) => void | Promise<void>;
+  onDismiss?: () => void;
 };
 
 export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterfaceProps>(
@@ -30,7 +31,9 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
     maxVisibleItems = 4,
     style,
     onSelectItem,
+    onDismiss,
   }, ref) {
+    const rootRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [canScrollUp, setCanScrollUp] = useState(false);
     const [canScrollDown, setCanScrollDown] = useState(false);
@@ -39,7 +42,7 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
         ? maxVisibleItems * 64 + Math.max(0, maxVisibleItems - 1) * 4
         : undefined;
 
-    useImperativeHandle(ref, () => containerRef.current, []);
+    useImperativeHandle(ref, () => rootRef.current, []);
 
     useEffect(() => {
       function updateScrollState() {
@@ -65,6 +68,32 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
       };
     }, [items.length, maxVisibleItems]);
 
+    useEffect(() => {
+      if (!onDismiss) return;
+
+      function handlePointerDown(event: PointerEvent) {
+        const element = rootRef.current;
+        const target = event.target;
+        if (!element || !(target instanceof Node) || element.contains(target)) return;
+        onDismiss();
+      }
+
+      function handleFocusIn(event: FocusEvent) {
+        const element = rootRef.current;
+        const target = event.target;
+        if (!element || !(target instanceof Node) || element.contains(target)) return;
+        onDismiss();
+      }
+
+      document.addEventListener("pointerdown", handlePointerDown);
+      document.addEventListener("focusin", handleFocusIn);
+
+      return () => {
+        document.removeEventListener("pointerdown", handlePointerDown);
+        document.removeEventListener("focusin", handleFocusIn);
+      };
+    }, [onDismiss]);
+
     function scrollMenu(direction: "up" | "down") {
       const element = containerRef.current;
       if (!element) return;
@@ -77,6 +106,7 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
 
     return (
       <div
+        ref={rootRef}
         className={`grid gap-1 rounded-xl border border-border bg-background p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${className}`.trim()}
         style={style}
       >

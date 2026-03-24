@@ -9,9 +9,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
-  ContextMenuInterface,
   type ContextMenuItem,
 } from "./context-menu-interface";
+import { TriggeredContextMenu } from "./triggered-context-menu";
 import {
   type ActionMenuState,
   type BlockActionContext,
@@ -250,6 +250,19 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       setActionMenuState(null);
     }
 
+    function onScroll(event: Event) {
+      const target = event.target;
+      if (
+        actionMenuRef.current &&
+        target instanceof Node &&
+        actionMenuRef.current.contains(target)
+      ) {
+        return;
+      }
+
+      closeActionMenu();
+    }
+
     function onEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         closeActionMenu();
@@ -257,12 +270,12 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     }
 
     window.addEventListener("click", closeActionMenu);
-    window.addEventListener("scroll", closeActionMenu, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("keydown", onEscape);
 
     return () => {
       window.removeEventListener("click", closeActionMenu);
-      window.removeEventListener("scroll", closeActionMenu, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("keydown", onEscape);
     };
   }, []);
@@ -974,35 +987,28 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       </div>
 
       {actionMenuState && actionMenuBlock ? (
-        <div
+        <TriggeredContextMenu
           ref={actionMenuRef}
-          className="fixed z-50"
-          style={
-            actionMenuPosition
-              ? { left: actionMenuPosition.left, top: actionMenuPosition.top }
-              : { left: -9999, top: -9999 }
-          }
-          onClick={(event) => event.stopPropagation()}
-        >
-          <ContextMenuInterface
-            className="w-[264px]"
-            items={actionMenuItems}
-            maxVisibleItems={4}
-            onSelectItem={(item) => {
-              if (!actionMenuBlock || !actionMenuState) return;
+          trigger="right-click"
+          className="w-[264px]"
+          position={actionMenuPosition}
+          items={actionMenuItems}
+          maxVisibleItems={4}
+          onDismiss={() => setActionMenuState(null)}
+          onSelectItem={(item) => {
+            if (!actionMenuBlock || !actionMenuState) return;
 
-              const context = getActionContext(
-                actionMenuBlock,
-                actionMenuState.trigger,
-                actionMenuState.showTextActions,
-              );
-              const definition = rightClickCommandDefinitions.find((action) => action.id === item.id);
+            const context = getActionContext(
+              actionMenuBlock,
+              actionMenuState.trigger,
+              actionMenuState.showTextActions,
+            );
+            const definition = rightClickCommandDefinitions.find((action) => action.id === item.id);
 
-              if (!definition) return;
-              void runDocAction(definition.id, context);
-            }}
-          />
-        </div>
+            if (!definition) return;
+            void runDocAction(definition.id, context);
+          }}
+        />
       ) : null}
     </section>
   );
