@@ -9,8 +9,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { ActionMenu } from "../action-menu";
-import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "./rich-text";
+import { ActionMenu } from "./action-menu";
+import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../../app/bridge/rich-text";
 
 export type SlashCommand = {
   id: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { InlineNoteBlock } from "../bridge/inline-note-block";
+import { InlineNoteBlock } from "../../components/editor/inline-note-block";
 
 const EDITOR_STORAGE_KEY = "neup.code.editor-content";
 

@@ -16,7 +16,7 @@ import {
   type BridgeItem,
   type BridgeRunRecord,
 } from "../bridge-storage";
-import { InlineNoteBlock, type InlineNoteSplit, type SlashCommand } from "../inline-note-block";
+import { InlineNoteBlock, type InlineNoteSplit, type SlashCommand } from "../../../components/editor/inline-note-block";
 import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../rich-text";
 import {
   BRIDGE_SESSION_STORAGE_KEY,

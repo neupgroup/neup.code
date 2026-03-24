@@ -1,4 +1,4 @@
-import { PageBlocksEditor } from "../page-blocks-editor";
+import { PageBlocksEditor } from "../../components/editor/page-blocks-editor";
 import type { WorkspacePageKey } from "../page-blocks-storage";
 
 type BlocksInstanceProps = {
