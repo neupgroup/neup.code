@@ -1,16 +1,16 @@
 import { PageBlocksEditor } from "../page-blocks-editor";
 import type { WorkspacePageKey } from "../page-blocks-storage";
 
-type DocInstanceProps = {
+type BlocksInstanceProps = {
   id?: string;
 };
 
-export function DocInstance({ id }: DocInstanceProps) {
+export function BlocksInstance({ id }: BlocksInstanceProps) {
   if (!id || id === "bridge") {
     return <PageBlocksEditor key="bridge" pageKey="bridge" />;
   }
 
-  const pageKey = getDocPageKey(id);
+  const pageKey = getBlocksPageKey(id);
   if (!pageKey) {
     return <PageBlocksEditor key={`page-${id}`} pageKey="bridge" chapterId={id} />;
   }
@@ -18,7 +18,7 @@ export function DocInstance({ id }: DocInstanceProps) {
   return <PageBlocksEditor key={pageKey} pageKey={pageKey} />;
 }
 
-export function getDocPageKey(id?: string): WorkspacePageKey | null {
+export function getBlocksPageKey(id?: string): WorkspacePageKey | null {
   if (id === "bridge") return "bridge";
   return null;
 }

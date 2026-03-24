@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const REQUIRED_AUTH_COOKIES = ['auth_account_id', 'auth_session_id', 'auth_session_key'] as const;
 
@@ -11,6 +11,10 @@ function hasAuthCookies(request: NextRequest) {
 
 export default function proxy(request: NextRequest) {
   if (hasAuthCookies(request)) {
+    return NextResponse.next();
+  }
+
+  if (process.env.NODE_ENV === 'development') {
     return NextResponse.next();
   }
 

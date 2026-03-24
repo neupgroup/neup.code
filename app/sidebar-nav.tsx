@@ -57,6 +57,8 @@ const sidebarGroups: SidebarGroup[] = [
     title: "Main",
     links: [
       { href: "/home", label: "Home", icon: "home" },
+      { href: "/editor", label: "Editor", icon: "page" },
+      { href: "/blocks", label: "Blocks", icon: "bridge" },
       { href: "/inbox", label: "Inbox", icon: "inbox" },
     ],
   },
@@ -80,9 +82,9 @@ function isActivePath(currentPathname: string, currentDocId: string | null, href
     return currentPathname === "/home" || currentPathname === "/";
   }
 
-  if (href === "/doc") {
+  if (href === "/blocks") {
     return (
-      (currentPathname === "/doc" && !currentDocId) ||
+      (currentPathname === "/blocks" && !currentDocId) ||
       currentPathname === "/bridge" ||
       currentPathname.startsWith("/bridge/")
     );
@@ -238,7 +240,18 @@ export function SidebarNav() {
   const [pinnedPages, setPinnedPages] = useState<WorkspacePinnedPages[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const [expandedWorkspaceId, setExpandedWorkspaceId] = useState<string | null | undefined>(undefined);
-  const [accessedFrom, setAccessedFrom] = useState<string[] | null>(null);
+  const [accessedFrom, setAccessedFrom] = useState<string[] | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    try {
+      const stored = window.sessionStorage.getItem("accessed_from");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -246,21 +259,11 @@ export function SidebarNav() {
     workspaceId: string;
   } | null>(null);
 
-  useEffect(() => {
-    try {
-      const stored = window.sessionStorage.getItem("accessed_from");
-      if (stored) {
-        setAccessedFrom(JSON.parse(stored));
-      }
-    } catch {}
-  }, []);
-
   function handlePageClick(page: BridgeItem, href: string, currentWorkspaceName: string) {
     const data = [currentWorkspaceName, page.name?.trim() || "Untitled page", href];
     setAccessedFrom(data);
     try {
       window.sessionStorage.setItem("accessed_from", JSON.stringify(data));
-      (window as any).accessedFrom = data;
     } catch {}
   }
 
@@ -493,8 +496,8 @@ export function SidebarNav() {
                     pinnedPages.find((item) => item.workspaceId === ws.id) ?? null,
                   ).map((page) => {
                     const href = getPageDocHref(page.id);
-                    const isExplicitlyActive = (pathname === "/doc" && docId === page.id);
-                    const isDocContext = pathname === "/doc" || pathname.startsWith("/bridge");
+                    const isExplicitlyActive = (pathname === "/blocks" && docId === page.id);
+                    const isDocContext = pathname === "/blocks" || pathname.startsWith("/bridge");
                     const isAccessedRoot = isDocContext && accessedFrom?.[2] === href;
                     const isActive = isExplicitlyActive || isAccessedRoot;
 

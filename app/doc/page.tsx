@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { DocInstance } from "./doc-instance";
 
 export const metadata: Metadata = {
   title: "Doc",
@@ -8,23 +7,25 @@ export const metadata: Metadata = {
 };
 
 type DocPageProps = {
-  searchParams: Promise<{ type?: string; id?: string; block?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function DocPage({ searchParams }: DocPageProps) {
-  const { type, id, block } = await searchParams;
+  const params = await searchParams;
+  const nextSearchParams = new URLSearchParams();
 
-  if (block === "chapter" && id) {
-    redirect(`/doc?id=${id}`);
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string") {
+      nextSearchParams.set(key, value);
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        nextSearchParams.append(key, entry);
+      }
+    }
   }
 
-  if (type === "bridge") {
-    return redirect("/doc");
-  }
-
-  if (id === "bridge") {
-    redirect("/doc");
-  }
-
-  return <DocInstance id={id} />;
+  redirect(nextSearchParams.size ? `/blocks?${nextSearchParams.toString()}` : "/blocks");
 }

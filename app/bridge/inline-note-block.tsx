@@ -33,6 +33,7 @@ type InlineNoteBlockProps = {
   placeholder?: string;
   className?: string;
   editorClassName?: string;
+  enterBehavior?: "split" | "lineBreak";
   autoFocus?: boolean;
   autoFocusPosition?: "start" | "end";
   onAutoFocusComplete?: () => void;
@@ -90,6 +91,7 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
   placeholder = "Type your note here...",
   className = "",
   editorClassName = "",
+  enterBehavior = "split",
   autoFocus = false,
   autoFocusPosition = "end",
   onAutoFocusComplete,
@@ -340,6 +342,15 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
     if (event.key !== "Enter") return;
 
     if (event.shiftKey) {
+      event.preventDefault();
+      if (typeof document !== "undefined") {
+        document.execCommand("insertLineBreak");
+      }
+      syncValue();
+      return;
+    }
+
+    if (enterBehavior === "lineBreak") {
       event.preventDefault();
       if (typeof document !== "undefined") {
         document.execCommand("insertLineBreak");

@@ -24,7 +24,7 @@ import {
   type InlineNoteSplit,
   type SlashCommand,
 } from "./bridge/inline-note-block";
-import { getBridgeEditHref, getChapterDocHref } from "./bridge/paths";
+import { getBridgeDocRootHref, getBridgeEditHref, getChapterDocHref } from "./bridge/paths";
 import { richTextHasContent, richTextToPlainText } from "./bridge/rich-text";
 import {
   WORKSPACE_PAGE_BLOCKS_STORAGE_EVENT,
@@ -71,7 +71,7 @@ type PendingDragState = {
   slotSize: number;
 };
 
-type DocActionTrigger = "slash" | "context" | "add";
+type DocActionTrigger = "slash" | "context";
 
 type ActionMenuState = {
   x: number;
@@ -534,19 +534,6 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     });
   }
 
-  function openAddMenu(event: React.MouseEvent<HTMLButtonElement>, block: WorkspacePageBlock) {
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    setActionMenuState({
-      x: rect.left,
-      y: rect.bottom + 8,
-      blockId: block.id,
-      showTextActions: false,
-      trigger: "add",
-    });
-  }
-
   function persistBlockKind(blockId: string, kind: WorkspacePageBlockKind, content = "") {
     if (chapterId) {
       return saveCurrentPageBlocks(
@@ -836,7 +823,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     },
     ...getAddActionDefinitions(pageKey).map((definition) => ({
       ...definition,
-      triggers: ["slash", "context", "add"] as DocActionTrigger[],
+      triggers: ["slash", "context"] as DocActionTrigger[],
     })),
   ];
 
@@ -986,6 +973,42 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     };
   }
 
+  function renderBlockHandle(
+    block: WorkspacePageBlock,
+    reorderIndex: number,
+    isDragged: boolean,
+    isSelected: boolean,
+  ) {
+    return (
+      <div className="flex shrink-0 items-start justify-start pt-3">
+        <button
+          type="button"
+          aria-label="Block menu and drag handle"
+          title={reorderIndex === -1 ? "Block menu" : "Block menu and drag handle"}
+          onClick={(event) => {
+            if (suppressClickRef.current) {
+              event.preventDefault();
+              event.stopPropagation();
+              return;
+            }
+
+            openContextMenu(event, block);
+          }}
+          onPointerDown={(event) => beginDrag(event, block.id, reorderIndex)}
+          className={`flex size-7 items-center justify-center rounded-lg text-foreground/35 transition ${
+            isDragged || isSelected
+              ? "bg-muted text-foreground/70"
+              : "hover:bg-muted/80 hover:text-foreground/70"
+          } ${
+            reorderIndex === -1 ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+          }`}
+        >
+          <GripDotsIcon />
+        </button>
+      </div>
+    );
+  }
+
   function mergeBlockBackward(blockId: string) {
     const currentIndex = blocks.findIndex((block) => block.id === blockId);
     if (currentIndex === -1) return;
@@ -1112,74 +1135,44 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
                   transform: `translateY(${translationY}px) scale(${isDragged ? 1.015 : 1})`,
                 }}
               >
-                <div
-                  className={`absolute -left-12 top-1 flex items-center gap-1 transition-opacity duration-150 ${
-                    isDragged || isSelected
-                      ? "pointer-events-auto opacity-100"
-                      : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    aria-label="Add block"
-                    title="Add block"
-                    onClick={(event) => openAddMenu(event, block)}
-                    className="flex size-8 items-center justify-center rounded-md text-foreground/40 transition hover:bg-muted hover:text-foreground/80"
-                  >
-                    <PlusIcon />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Drag block"
-                    title="Drag block"
-                    disabled={reorderIndex === -1}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onPointerDown={(event) => beginDrag(event, block.id, reorderIndex)}
-                    className={`flex size-8 items-center justify-center rounded-md text-foreground/40 transition hover:bg-muted hover:text-foreground/80 ${
-                      reorderIndex === -1 ? "cursor-not-allowed opacity-35" : "cursor-grab active:cursor-grabbing"
+                <div className="flex items-start gap-0.5">
+                  {renderBlockHandle(block, reorderIndex, isDragged, isSelected)}
+                  <div
+                    className={`min-w-0 flex-1 rounded-xl border bg-background px-4 py-3 transition-[box-shadow,border-color,background-color] hover:border-foreground/15 hover:bg-muted/25 ${
+                      isDragged
+                        ? "border-foreground/20 ring-1 ring-foreground/10 shadow-[0_28px_70px_rgba(15,23,42,0.22)]"
+                        : isSelected
+                          ? "border-sky-400 ring-2 ring-sky-200"
+                          : "border-border"
                     }`}
                   >
-                    <GripDotsIcon />
-                  </button>
-                </div>
-                <div
-                  className={`rounded-xl border px-1 py-0.5 transition-[box-shadow,border-color] ${
-                    isDragged
-                      ? "border-foreground/20 ring-1 ring-foreground/10 shadow-[0_28px_70px_rgba(15,23,42,0.22)]"
-                      : isSelected
-                        ? "border-sky-400 ring-2 ring-sky-200"
-                        : "border-transparent"
-                  }`}
-                >
-                <InlineNoteBlock
-                  ref={(element) => {
-                    noteBlockRefs.current[block.id] = element;
-                  }}
-                  value={block.content}
-                  onChange={(value) => updateBlockContent(block.id, value)}
-                  placeholder={blockPlaceholder(block.kind)}
-                  autoFocus={focusedTarget?.id === block.id}
-                  autoFocusPosition={focusedTarget?.position ?? "end"}
-                  onAutoFocusComplete={() => setFocusedTarget(null)}
-                  onSplit={(split) => handleSplit(block.id, split)}
-                  onBackspaceAtStart={() => mergeBlockBackward(block.id)}
-                  onNavigatePrevious={() => focusPreviousNote(block.id)}
-                  onNavigateNext={() => focusNextNote(block.id)}
-                  editorClassName={headingEditorClassName(block.kind)}
-                  commands={block.kind === "note" ? getSlashCommands(block) : []}
-                  onSelectCommand={(commandId) => handleCommandSelection(block.id, commandId)}
-                  maxVisibleCommands={4}
-                  onContextMenu={(event, details) =>
-                    openContextMenu(
-                      event,
-                      block,
-                      details.hasSelection || details.hasContent,
-                    )
-                  }
-                />
+                  <InlineNoteBlock
+                    ref={(element) => {
+                      noteBlockRefs.current[block.id] = element;
+                    }}
+                    value={block.content}
+                    onChange={(value) => updateBlockContent(block.id, value)}
+                    placeholder={blockPlaceholder(block.kind)}
+                    autoFocus={focusedTarget?.id === block.id}
+                    autoFocusPosition={focusedTarget?.position ?? "end"}
+                    onAutoFocusComplete={() => setFocusedTarget(null)}
+                    onSplit={(split) => handleSplit(block.id, split)}
+                    onBackspaceAtStart={() => mergeBlockBackward(block.id)}
+                    onNavigatePrevious={() => focusPreviousNote(block.id)}
+                    onNavigateNext={() => focusNextNote(block.id)}
+                    editorClassName={headingEditorClassName(block.kind)}
+                    commands={block.kind === "note" ? getSlashCommands(block) : []}
+                    onSelectCommand={(commandId) => handleCommandSelection(block.id, commandId)}
+                    maxVisibleCommands={4}
+                    onContextMenu={(event, details) =>
+                      openContextMenu(
+                        event,
+                        block,
+                        details.hasSelection || details.hasContent,
+                      )
+                    }
+                  />
+                  </div>
                 </div>
               </div>
             );
@@ -1235,52 +1228,22 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
                   transform: `translateY(${translationY}px) scale(${isDragged ? 1.015 : 1})`,
                 }}
               >
-                <div
-                  className={`absolute -left-12 top-1 flex items-center gap-1 transition-opacity duration-150 ${
-                    isDragged || isSelected
-                      ? "pointer-events-auto opacity-100"
-                      : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    aria-label="Add block"
-                    title="Add block"
-                    onClick={(event) => openAddMenu(event, block)}
-                    className="flex size-8 items-center justify-center rounded-md text-foreground/40 transition hover:bg-muted hover:text-foreground/80"
-                  >
-                    <PlusIcon />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Drag block"
-                    title="Drag block"
-                    disabled={reorderIndex === -1}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onPointerDown={(event) => beginDrag(event, block.id, reorderIndex)}
-                    className={`flex size-8 items-center justify-center rounded-md text-foreground/40 transition hover:bg-muted hover:text-foreground/80 ${
-                      reorderIndex === -1 ? "cursor-not-allowed opacity-35" : "cursor-grab active:cursor-grabbing"
+                <div className="flex items-start gap-0.5">
+                  {renderBlockHandle(block, reorderIndex, isDragged, isSelected)}
+                  <Link
+                    href={blockHref}
+                    onContextMenu={(event) => openContextMenu(event, block)}
+                    className={`block min-w-0 flex-1 rounded-xl border bg-background px-4 py-3 transition hover:border-foreground/15 hover:bg-muted/25 ${
+                      isDragged
+                        ? "border-foreground/20 ring-1 ring-foreground/10 shadow-[0_28px_70px_rgba(15,23,42,0.22)]"
+                        : isSelected
+                          ? "border-sky-400 ring-2 ring-sky-200"
+                          : "border-border"
                     }`}
                   >
-                    <GripDotsIcon />
-                  </button>
+                    {cardContent}
+                  </Link>
                 </div>
-                <Link
-                  href={blockHref}
-                  onContextMenu={(event) => openContextMenu(event, block)}
-                  className={`block rounded-xl border bg-background px-4 py-3 transition hover:border-foreground/15 hover:bg-muted/25 ${
-                    isDragged
-                      ? "border-foreground/20 ring-1 ring-foreground/10 shadow-[0_28px_70px_rgba(15,23,42,0.22)]"
-                      : isSelected
-                        ? "border-sky-400 ring-2 ring-sky-200"
-                        : "border-border"
-                  }`}
-                >
-                  {cardContent}
-                </Link>
               </div>
             );
           }
@@ -1313,53 +1276,23 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
                 transform: `translateY(${translationY}px) scale(${isDragged ? 1.015 : 1})`,
               }}
             >
-              <div
-                className={`absolute -left-12 top-1 flex items-center gap-1 transition-opacity duration-150 ${
-                  isDragged || isSelected
-                    ? "pointer-events-auto opacity-100"
-                    : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-                }`}
-              >
+              <div className="flex items-start gap-0.5">
+                {renderBlockHandle(block, reorderIndex, isDragged, isSelected)}
                 <button
                   type="button"
-                  aria-label="Add block"
-                  title="Add block"
-                  onClick={(event) => openAddMenu(event, block)}
-                  className="flex size-8 items-center justify-center rounded-md text-foreground/40 transition hover:bg-muted hover:text-foreground/80"
-                >
-                  <PlusIcon />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Drag block"
-                  title="Drag block"
-                  disabled={reorderIndex === -1}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                  onPointerDown={(event) => beginDrag(event, block.id, reorderIndex)}
-                  className={`flex size-8 items-center justify-center rounded-md text-foreground/40 transition hover:bg-muted hover:text-foreground/80 ${
-                    reorderIndex === -1 ? "cursor-not-allowed opacity-35" : "cursor-grab active:cursor-grabbing"
+                  onClick={() => handleStaticBlockClick(block)}
+                  onContextMenu={(event) => openContextMenu(event, block)}
+                  className={`block min-w-0 w-full flex-1 rounded-xl border bg-background px-4 py-3 text-left transition hover:border-foreground/15 hover:bg-muted/25 ${
+                    isDragged
+                      ? "border-foreground/20 ring-1 ring-foreground/10 shadow-[0_28px_70px_rgba(15,23,42,0.22)]"
+                      : isSelected
+                        ? "border-sky-400 ring-2 ring-sky-200"
+                        : "border-border"
                   }`}
                 >
-                  <GripDotsIcon />
+                  {cardContent}
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => handleStaticBlockClick(block)}
-                onContextMenu={(event) => openContextMenu(event, block)}
-                className={`block w-full rounded-xl border bg-background px-4 py-3 text-left transition hover:border-foreground/15 hover:bg-muted/25 ${
-                  isDragged
-                    ? "border-foreground/20 ring-1 ring-foreground/10 shadow-[0_28px_70px_rgba(15,23,42,0.22)]"
-                    : isSelected
-                      ? "border-sky-400 ring-2 ring-sky-200"
-                      : "border-border"
-                }`}
-              >
-                {cardContent}
-              </button>
             </div>
           );
         })}
@@ -1571,7 +1504,7 @@ function getBlockRoute(kind: WorkspacePageBlockKind, id: string) {
   if (kind === "api" || kind === "webhook" || kind === "grpc") {
     return getBridgeEditHref(id);
   }
-  return `/doc?type=bridge`;
+  return getBridgeDocRootHref();
 }
 
 function getResolvedStaticBlockCard(
@@ -1754,23 +1687,6 @@ function hasActiveTextSelection() {
 
 function getReorderableBlocks(blocks: WorkspacePageBlock[]) {
   return blocks.filter((block, index) => !isTrailingEmptyNoteBlock(blocks, block, index));
-}
-
-function PlusIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-    >
-      <path d="M8 3.25v9.5" />
-      <path d="M3.25 8h9.5" />
-    </svg>
-  );
 }
 
 function GripDotsIcon() {

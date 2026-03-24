@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BRIDGE_RUN_STORAGE_KEY,
   BRIDGE_STORAGE_KEY,
@@ -367,7 +367,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
       ? loadBridges().filter((item) => item.parentChapterId === bridge.id)
       : [];
 
-  function syncBridgeState(targetId = id) {
+  const syncBridgeState = useCallback((targetId = id) => {
     const loadedBridges = loadBridges();
     const loadedBridge = loadedBridges.find((item) => item.id === targetId) ?? null;
 
@@ -386,7 +386,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
         ? normalizedBridges.find((item) => item.id === nextBridge.parentChapterId) ?? null
         : null,
     );
-  }
+  }, [id]);
 
   function persistChapterBridges(nextBridges: BridgeItem[]) {
     if (!bridge || bridge.entryKind !== "chapter") {
@@ -648,7 +648,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     const runMap = loadBridgeRuns();
     setRunRecord(runMap[id] ?? { bridgeId: id, status: "idle" });
     setReady(true);
-  }, [id]);
+  }, [id, syncBridgeState]);
 
   useEffect(() => {
     function onStorage(event: StorageEvent) {
@@ -668,7 +668,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
 
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [id]);
+  }, [id, syncBridgeState]);
 
   useEffect(() => {
     function closeMenus() {
@@ -697,7 +697,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     const targetHref = getChapterDocHref(bridge.id);
     const currentSearch = typeof window !== "undefined" ? window.location.search : "";
     const isOnTargetRoute =
-      pathname === "/doc" &&
+      pathname === "/blocks" &&
       new URLSearchParams(currentSearch).get("id") === bridge.id &&
       new URLSearchParams(currentSearch).get("block") === "chapter";
 
