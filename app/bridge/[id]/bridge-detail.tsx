@@ -21,7 +21,7 @@ import {
   type BridgeItem,
   type BridgeRunRecord,
 } from "../bridge-storage";
-import { InlineNoteBlock, type InlineNoteSplit, type SlashCommand } from "../../../components/editor/inline-note-block";
+import { InlineNoteBlock, type InlineNoteSplit, type SlashCommand } from "@/components/editor/inline-note-block";
 import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../rich-text";
 import {
   BRIDGE_SESSION_STORAGE_KEY,
@@ -345,6 +345,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   } | null>(null);
   const [pasteMessage, setPasteMessage] = useState<string | null>(null);
   const [selectedChapterBlockIds, setSelectedChapterBlockIds] = useState<string[]>([]);
+  const [contextSelectedChapterBlockId, setContextSelectedChapterBlockId] = useState<string | null>(null);
   const [deleteChapterBlockIds, setDeleteChapterBlockIds] = useState<string[]>([]);
   const [isDeletingChapterBlocks, setIsDeletingChapterBlocks] = useState(false);
   const [focusedChildNoteTarget, setFocusedChildNoteTarget] = useState<{
@@ -438,6 +439,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   }
 
   function toggleChapterBlockSelection(blockId: string) {
+    setContextSelectedChapterBlockId(null);
     setSelectedChapterBlockIds((current) =>
       current.includes(blockId)
         ? current.filter((id) => id !== blockId)
@@ -682,6 +684,20 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   useEffect(() => {
     function closeMenus() {
       setContextMenu(null);
+      setContextSelectedChapterBlockId(null);
+    }
+
+    function clearContextSelection(event: PointerEvent) {
+      const target = event.target;
+      if (
+        contextMenuRef.current &&
+        target instanceof Node &&
+        contextMenuRef.current.contains(target)
+      ) {
+        return;
+      }
+
+      setContextSelectedChapterBlockId(null);
     }
 
     function onScroll(event: Event) {
@@ -703,11 +719,13 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
       }
     }
 
+    window.addEventListener("pointerdown", clearContextSelection, true);
     window.addEventListener("click", closeMenus);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("keydown", onEscape);
 
     return () => {
+      window.removeEventListener("pointerdown", clearContextSelection, true);
       window.removeEventListener("click", closeMenus);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("keydown", onEscape);
@@ -1210,14 +1228,15 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
                     <div
                       key={block.id}
                       className={`rounded-xl px-1 py-1 ${
-                        selectedChapterBlockIds.includes(block.id) ? "border border-sky-400 ring-2 ring-sky-200" : ""
+                        selectedChapterBlockIds.includes(block.id) ||
+                        contextSelectedChapterBlockId === block.id
+                          ? "border border-sky-400 ring-2 ring-sky-200"
+                          : ""
                       }`}
                       onContextMenu={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        setSelectedChapterBlockIds((current) =>
-                          current.includes(block.id) ? current : [block.id],
-                        );
+                        setContextSelectedChapterBlockId(block.id);
                         setContextMenu({
                           x: event.clientX,
                           y: event.clientY,
@@ -1229,6 +1248,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
                         event.preventDefault();
                         event.stopPropagation();
                         setContextMenu(null);
+                        setContextSelectedChapterBlockId(null);
                         toggleChapterBlockSelection(block.id);
                       }}
                     >
@@ -1260,14 +1280,13 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
                         event.preventDefault();
                         event.stopPropagation();
                         setContextMenu(null);
+                        setContextSelectedChapterBlockId(null);
                         toggleChapterBlockSelection(block.id);
                       }}
                       onContextMenu={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        setSelectedChapterBlockIds((current) =>
-                          current.includes(block.id) ? current : [block.id],
-                        );
+                        setContextSelectedChapterBlockId(block.id);
                         setContextMenu({
                           x: event.clientX,
                           y: event.clientY,
@@ -1275,7 +1294,8 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
                         });
                       }}
                       className={`rounded-xl border bg-background px-4 py-3 transition ${
-                        selectedChapterBlockIds.includes(block.id)
+                        selectedChapterBlockIds.includes(block.id) ||
+                        contextSelectedChapterBlockId === block.id
                           ? "border-sky-400 ring-2 ring-sky-200"
                           : "border-border hover:border-foreground/15"
                       }`}

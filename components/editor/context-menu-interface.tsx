@@ -1,14 +1,17 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { CSSProperties, MouseEvent, MutableRefObject } from "react";
 
 export type ContextMenuItem = {
   id: string;
   label: string;
+  compactLabel?: string;
   description?: string;
   disabled?: boolean;
+  active?: boolean;
   sectionTitle?: string;
   tone?: "default" | "danger";
   interaction?: "click" | "mousedown";
+  menuLayout?: "list" | "grid";
 };
 
 type ContextMenuInterfaceProps = {
@@ -35,38 +38,14 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
   }, ref) {
     const rootRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const [canScrollUp, setCanScrollUp] = useState(false);
-    const [canScrollDown, setCanScrollDown] = useState(false);
+    const toolbarItems = items.filter((item) => item.menuLayout === "grid");
+    const listItems = items.filter((item) => item.menuLayout !== "grid");
     const menuListMaxHeight =
       maxVisibleItems > 0
         ? maxVisibleItems * 64 + Math.max(0, maxVisibleItems - 1) * 4
         : undefined;
 
     useImperativeHandle(ref, () => rootRef.current, []);
-
-    useEffect(() => {
-      function updateScrollState() {
-        const element = containerRef.current;
-        if (!element) return;
-
-        setCanScrollUp(element.scrollTop > 4);
-        setCanScrollDown(
-          element.scrollTop + element.clientHeight < element.scrollHeight - 4,
-        );
-      }
-
-      updateScrollState();
-      const element = containerRef.current;
-      if (!element) return;
-
-      element.addEventListener("scroll", updateScrollState);
-      window.addEventListener("resize", updateScrollState);
-
-      return () => {
-        element.removeEventListener("scroll", updateScrollState);
-        window.removeEventListener("resize", updateScrollState);
-      };
-    }, [items.length, maxVisibleItems]);
 
     useEffect(() => {
       if (!onDismiss) return;
@@ -94,52 +73,18 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
       };
     }, [onDismiss]);
 
-    function scrollMenu(direction: "up" | "down") {
-      const element = containerRef.current;
-      if (!element) return;
-
-      element.scrollBy({
-        top: direction === "down" ? 68 : -68,
-        behavior: "smooth",
-      });
-    }
-
     return (
       <div
         ref={rootRef}
         className={`grid gap-1 rounded-xl border border-border bg-background p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${className}`.trim()}
         style={style}
       >
-        {canScrollUp ? (
-          <button
-            type="button"
-            aria-label="Scroll menu up"
-            onClick={() => scrollMenu("up")}
-            className="flex h-8 items-center justify-center rounded-lg text-foreground/55 transition hover:bg-muted hover:text-foreground"
-          >
-            <MenuArrow direction="up" />
-          </button>
-        ) : null}
-
-        <div
-          ref={containerRef}
-          className="grid gap-1 overflow-y-auto pr-1"
-          style={{ maxHeight: menuListMaxHeight }}
-        >
-          {items.map((item, index) => {
-            const previousSectionTitle =
-              index > 0 ? items[index - 1]?.sectionTitle : undefined;
-            const showSectionTitle =
-              item.sectionTitle && item.sectionTitle !== previousSectionTitle;
-
-            return (
-              <div key={item.id} className="grid gap-1">
-                {showSectionTitle ? (
-                  <div className="px-3 pb-1 pt-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    {item.sectionTitle}
-                  </div>
-                ) : null}
+        {toolbarItems.length ? (
+          <div className="grid gap-1 border-b border-border/80 pb-2">
+            <div className="grid grid-cols-4 gap-1">
+              {toolbarItems.map((item, index) => (
                 <button
+                  key={item.id}
                   ref={(element) => {
                     if (itemRefs) {
                       itemRefs.current[index] = element;
@@ -156,8 +101,63 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
                     if (item.interaction === "mousedown") return;
                     void onSelectItem?.(item, event);
                   }}
+                  className={`flex h-11 items-center justify-center rounded-lg border text-[1rem] transition ${
+                    item.active || activeItemId === item.id
+                      ? "border-foreground/20 bg-muted"
+                      : "border-transparent hover:border-foreground/10 hover:bg-muted"
+                  } ${
+                    item.tone === "danger"
+                      ? "text-rose-600 hover:bg-rose-50"
+                      : "text-foreground"
+                  } disabled:cursor-not-allowed disabled:opacity-40`}
+                  title={item.label}
+                >
+                  <span className={gridItemLabelClassName(item.id)}>
+                    {item.compactLabel ?? item.label.slice(0, 1)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          ref={containerRef}
+          className="grid gap-1 overflow-y-auto overscroll-contain pr-1"
+          style={{ maxHeight: menuListMaxHeight }}
+        >
+          {listItems.map((item, index) => {
+            const previousSectionTitle =
+              index > 0 ? listItems[index - 1]?.sectionTitle : undefined;
+            const showSectionTitle =
+              item.sectionTitle && item.sectionTitle !== previousSectionTitle;
+
+            return (
+              <div key={item.id} className="grid gap-1">
+                {showSectionTitle ? (
+                  <div className="px-3 pb-1 pt-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    {item.sectionTitle}
+                  </div>
+                ) : null}
+                <button
+                  ref={(element) => {
+                    if (itemRefs) {
+                      itemRefs.current[toolbarItems.length + index] = element;
+                    }
+                  }}
+                  type="button"
+                  disabled={item.disabled}
+                  onMouseDown={(event) => {
+                    if (item.interaction !== "mousedown") return;
+                    event.preventDefault();
+                    void onSelectItem?.(item, event);
+                  }}
+                  onClick={(event) => {
+                    if (item.interaction === "mousedown") return;
+                    void onSelectItem?.(item, event);
+                  }}
                   className={`flex w-full flex-col rounded-lg px-3 py-2 text-left text-[0.84rem] transition ${
-                    activeItemId === item.id ? "bg-muted" : "hover:bg-muted"
+                    item.active || activeItemId === item.id ? "bg-muted" : "hover:bg-muted"
                   } ${
                     item.tone === "danger"
                       ? "text-rose-600 hover:bg-rose-50"
@@ -175,35 +175,14 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
             );
           })}
         </div>
-
-        {canScrollDown ? (
-          <button
-            type="button"
-            aria-label="Scroll menu down"
-            onClick={() => scrollMenu("down")}
-            className="flex h-8 items-center justify-center rounded-lg text-foreground/55 transition hover:bg-muted hover:text-foreground"
-          >
-            <MenuArrow direction="down" />
-          </button>
-        ) : null}
       </div>
     );
   },
 );
 
-function MenuArrow({ direction }: { direction: "up" | "down" }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {direction === "up" ? <path d="M6 14l6-6 6 6" /> : <path d="M6 10l6 6 6-6" />}
-    </svg>
-  );
+function gridItemLabelClassName(itemId: string) {
+  if (itemId === "bold") return "text-[1.15rem] font-semibold";
+  if (itemId === "italic") return "text-[1.15rem] italic";
+  if (itemId === "underline") return "text-[1.15rem] underline underline-offset-4";
+  return "text-[1rem] font-medium";
 }

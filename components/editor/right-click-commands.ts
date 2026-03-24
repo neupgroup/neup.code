@@ -51,26 +51,35 @@ export function getRightClickCommandDefinitions({
     {
       id: "bold",
       label: "Bold",
+      compactLabel: "B",
       sectionTitle: "Style",
       triggers: ["context"],
+      menuLayout: "grid",
       isVisible: (context) =>
         context.showTextActions && isTextBlockKind(context.block.kind),
+      isActive: (context) => context.activeTextFormats.bold,
     },
     {
       id: "italic",
       label: "Italic",
+      compactLabel: "I",
       sectionTitle: "Style",
       triggers: ["context"],
+      menuLayout: "grid",
       isVisible: (context) =>
         context.showTextActions && isTextBlockKind(context.block.kind),
+      isActive: (context) => context.activeTextFormats.italic,
     },
     {
       id: "underline",
       label: "Underline",
+      compactLabel: "U",
       sectionTitle: "Style",
       triggers: ["context"],
+      menuLayout: "grid",
       isVisible: (context) =>
         context.showTextActions && isTextBlockKind(context.block.kind),
+      isActive: (context) => context.activeTextFormats.underline,
     },
     ...getAddActionDefinitions(pageKey).map((definition) => ({
       ...definition,
@@ -89,9 +98,12 @@ export function getRightClickMenuItems(
     .map((definition) => ({
       id: definition.id,
       label: definition.label,
+      compactLabel: definition.compactLabel,
       description: definition.description,
       sectionTitle: definition.sectionTitle,
       tone: definition.tone,
+      menuLayout: definition.menuLayout,
+      active: definition.isActive?.(context) ?? false,
       disabled: definition.isDisabled?.(context) ?? false,
     }));
 }

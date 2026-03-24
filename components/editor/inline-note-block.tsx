@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { TriggeredContextMenu } from "./triggered-context-menu";
+import { EMPTY_TEXT_FORMAT_STATE, type TextFormat, type TextFormatState } from "./block-action-context";
 import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../../app/bridge/rich-text";
 
 export type SlashCommand = {
@@ -49,12 +50,13 @@ type InlineNoteBlockProps = {
     details: {
       hasSelection: boolean;
       hasContent: boolean;
+      activeTextFormats: TextFormatState;
     },
   ) => void;
 };
 
 export type InlineNoteBlockHandle = {
-  applyFormat: (format: "bold" | "italic" | "underline") => void;
+  applyFormat: (format: TextFormat) => TextFormatState;
 };
 
 function isCaretAtStart(element: HTMLElement) {
@@ -281,7 +283,9 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
     ref,
     () => ({
       applyFormat(format) {
-        if (typeof document === "undefined" || !editorRef.current) return;
+        if (typeof document === "undefined" || !editorRef.current) {
+          return EMPTY_TEXT_FORMAT_STATE;
+        }
 
         editorRef.current.focus();
 
@@ -290,7 +294,9 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
         }
 
         document.execCommand(format);
+        savedSelectionRef.current = getEditorSelectionRange(editorRef.current);
         syncValue();
+        return getActiveTextFormats();
       },
     }),
     [syncValue],
@@ -310,6 +316,7 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
     onContextMenu?.(event, {
       hasSelection: Boolean(savedSelectionRef.current && !savedSelectionRef.current.collapsed),
       hasContent: richTextHasContent(value),
+      activeTextFormats: getActiveTextFormats(),
     });
   }
 
@@ -548,6 +555,18 @@ function getEditorSelectionRange(editor: HTMLDivElement | null) {
   }
 
   return range.cloneRange();
+}
+
+function getActiveTextFormats(): TextFormatState {
+  if (typeof document === "undefined" || typeof document.queryCommandState !== "function") {
+    return EMPTY_TEXT_FORMAT_STATE;
+  }
+
+  return {
+    bold: document.queryCommandState("bold"),
+    italic: document.queryCommandState("italic"),
+    underline: document.queryCommandState("underline"),
+  };
 }
 
 function getActiveSlashQuery(editor: HTMLDivElement | null, triggerRange: Range | null) {

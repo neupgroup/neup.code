@@ -1,6 +1,7 @@
 import type { MouseEvent, MutableRefObject, ReactNode } from "react";
 import type { WorkspacePageBlock } from "../../../app/page-blocks-storage";
 import { InlineNoteBlock, type InlineNoteBlockHandle, type InlineNoteSplit, type SlashCommand } from "../inline-note-block";
+import type { TextFormatState } from "../block-action-context";
 import { BlockRowShell, BlockSurface } from "./row-shell";
 
 type FocusTarget = {
@@ -28,7 +29,7 @@ type TextBlockRowProps = {
   onChange: (value: string) => void;
   onContextMenu: (
     event: MouseEvent<HTMLElement>,
-    details?: { hasSelection: boolean; hasContent: boolean },
+    details?: { hasSelection: boolean; hasContent: boolean; activeTextFormats: TextFormatState },
   ) => void;
   onModifierSelect: (blockId: string) => void;
   onNavigateNext: () => void;

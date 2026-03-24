@@ -16,6 +16,9 @@ import {
   type ActionMenuState,
   type BlockActionContext,
   type BlockActionTrigger,
+  EMPTY_TEXT_FORMAT_STATE,
+  type TextFormat,
+  type TextFormatState,
 } from "./block-action-context";
 import {
   canMoveBlock,
@@ -190,6 +193,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
   const [focusedTarget, setFocusedTarget] = useState<FocusTarget | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
+  const [contextSelectedBlockId, setContextSelectedBlockId] = useState<string | null>(null);
   const [actionMenuState, setActionMenuState] = useState<ActionMenuState | null>(null);
   const [actionMenuPosition, setActionMenuPosition] = useState<{ left: number; top: number } | null>(
     null,
@@ -248,6 +252,20 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
   useEffect(() => {
     function closeActionMenu() {
       setActionMenuState(null);
+      setContextSelectedBlockId(null);
+    }
+
+    function clearContextSelection(event: PointerEvent) {
+      const target = event.target;
+      if (
+        actionMenuRef.current &&
+        target instanceof Node &&
+        actionMenuRef.current.contains(target)
+      ) {
+        return;
+      }
+
+      setContextSelectedBlockId(null);
     }
 
     function onScroll(event: Event) {
@@ -269,11 +287,13 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       }
     }
 
+    window.addEventListener("pointerdown", clearContextSelection, true);
     window.addEventListener("click", closeActionMenu);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("keydown", onEscape);
 
     return () => {
+      window.removeEventListener("pointerdown", clearContextSelection, true);
       window.removeEventListener("click", closeActionMenu);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("keydown", onEscape);
@@ -409,15 +429,17 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     event: React.MouseEvent<HTMLElement>,
     block: WorkspacePageBlock,
     showTextActions = false,
+    activeTextFormats: TextFormatState = EMPTY_TEXT_FORMAT_STATE,
   ) {
     event.preventDefault();
     event.stopPropagation();
-    setSelectedBlockIds((current) => (current.includes(block.id) ? current : [block.id]));
+    setContextSelectedBlockId(block.id);
     setActionMenuState({
       x: event.clientX,
       y: event.clientY,
       blockId: block.id,
       showTextActions,
+      activeTextFormats,
       trigger: "context",
     });
   }
@@ -580,6 +602,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     if (!nextBlocks) return;
     saveCurrentPageBlocks(nextBlocks);
     setActionMenuState(null);
+    setContextSelectedBlockId(null);
   }
 
   function insertBlockAfter(blockId: string, kind: WorkspacePageBlockKind) {
@@ -593,6 +616,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       saveCurrentPageBlocks(nextBlocks);
       setFocusedTarget({ id: nextBlock.id, position: "start" });
       setActionMenuState(null);
+      setContextSelectedBlockId(null);
       return;
     }
 
@@ -614,6 +638,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     nextBlocks.splice(currentIndex + 1, 0, nextBlock);
     saveCurrentPageBlocks(nextBlocks);
     setActionMenuState(null);
+    setContextSelectedBlockId(null);
 
     if (chapterId) {
       router.push(getBlockRoute(kind, nextBlock.id));
@@ -633,6 +658,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     url.hash = getBlockAnchorId(blockId);
     await copyTextToClipboard(url.toString());
     setActionMenuState(null);
+    setContextSelectedBlockId(null);
   }
 
   async function handleCut(blockId: string) {
@@ -645,11 +671,21 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       current.filter((id) => !targetBlocks.some((target) => target.id === id)),
     );
     setActionMenuState(null);
+    setContextSelectedBlockId(null);
   }
 
-  function applyTextFormat(blockId: string, format: "bold" | "italic" | "underline") {
-    noteBlockRefs.current[blockId]?.applyFormat(format);
-    setActionMenuState(null);
+  function applyTextFormat(blockId: string, format: TextFormat) {
+    const activeTextFormats =
+      noteBlockRefs.current[blockId]?.applyFormat(format) ?? EMPTY_TEXT_FORMAT_STATE;
+
+    setActionMenuState((current) =>
+      current && current.blockId === blockId
+        ? {
+            ...current,
+            activeTextFormats,
+          }
+        : current,
+    );
   }
 
   const actionMenuBlock = actionMenuState
@@ -667,11 +703,13 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     block: WorkspacePageBlock,
     trigger: BlockActionTrigger,
     showTextActions = false,
+    activeTextFormats: TextFormatState = EMPTY_TEXT_FORMAT_STATE,
   ): BlockActionContext {
     return {
       block,
       blockIndex: blocks.findIndex((item) => item.id === block.id),
       showTextActions,
+      activeTextFormats,
       trigger,
     };
   }
@@ -680,8 +718,9 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     block: WorkspacePageBlock,
     trigger: BlockActionTrigger,
     showTextActions = false,
+    activeTextFormats: TextFormatState = EMPTY_TEXT_FORMAT_STATE,
   ): ContextMenuItem[] {
-    const context = getActionContext(block, trigger, showTextActions);
+    const context = getActionContext(block, trigger, showTextActions, activeTextFormats);
     return getRightClickMenuItems(rightClickCommandDefinitions, context);
   }
 
@@ -740,12 +779,14 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
           actionMenuBlock,
           actionMenuState.trigger,
           actionMenuState.showTextActions,
+          actionMenuState.activeTextFormats,
         )
       : [];
 
   const reorderableBlockIds = getReorderableBlocks(blocks).map((block) => block.id);
 
   function toggleBlockSelection(blockId: string) {
+    setContextSelectedBlockId(null);
     setSelectedBlockIds((current) => toggleSelectedBlockIds(current, blockId));
   }
 
@@ -900,7 +941,8 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
         {blocks.map((block) => {
           const reorderIndex = reorderableBlockIds.indexOf(block.id);
           const isDragged = dragState?.id === block.id;
-          const isSelected = normalizedSelectedBlockIds.includes(block.id);
+          const isSelected =
+            normalizedSelectedBlockIds.includes(block.id) || contextSelectedBlockId === block.id;
           const translationY =
             reorderIndex === -1
               ? 0
@@ -936,6 +978,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
                     event,
                     block,
                     details?.hasSelection || details?.hasContent || false,
+                    details?.activeTextFormats ?? EMPTY_TEXT_FORMAT_STATE,
                   )
                 }
                 onModifierSelect={toggleBlockSelection}
@@ -1002,6 +1045,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
               actionMenuBlock,
               actionMenuState.trigger,
               actionMenuState.showTextActions,
+              actionMenuState.activeTextFormats,
             );
             const definition = rightClickCommandDefinitions.find((action) => action.id === item.id);
 
