@@ -46,11 +46,6 @@ export default function WorkspacePage() {
         saveWorkspaces([defaultWorkspace]);
         setWorkspaces([defaultWorkspace]);
       } else {
-        // Ensure at least one default if none exists
-        if (!items.some(w => w.isDefault)) {
-          items[0].isDefault = true;
-          saveWorkspaces(items);
-        }
         setWorkspaces(items);
       }
     }
@@ -61,14 +56,21 @@ export default function WorkspacePage() {
   }, []);
 
   function handleToggleHide(id: string) {
-    const next = workspaces.map((w) => w.id === id ? { ...w, isHidden: !w.isHidden } : w);
+    const next = workspaces.map((w) => {
+      if (w.id !== id || w.isDefault) return w;
+      return { ...w, isHidden: !w.isHidden };
+    });
     saveWorkspaces(next);
   }
 
   function handleSetDefault(id: string) {
+    const selectedWorkspace = workspaces.find((workspace) => workspace.id === id);
+    if (!selectedWorkspace || selectedWorkspace.isHidden) return;
+
     const next = workspaces.map((w) => ({
       ...w,
-      isDefault: w.id === id
+      isDefault: w.id === id,
+      isHidden: w.id === id ? false : w.isHidden,
     }));
     saveWorkspaces(next);
   }
@@ -117,6 +119,16 @@ export default function WorkspacePage() {
                 <span className="inline-flex items-center rounded-sm bg-muted px-2 py-0.5 text-[0.65rem] font-semibold tracking-wider text-muted-foreground uppercase">
                   Owner
                 </span>
+                {ws.isDefault ? (
+                  <span className="inline-flex items-center rounded-sm bg-amber-500/10 px-2 py-0.5 text-[0.65rem] font-semibold tracking-wider text-amber-600 uppercase">
+                    Default
+                  </span>
+                ) : null}
+                {ws.isHidden ? (
+                  <span className="inline-flex items-center rounded-sm bg-muted px-2 py-0.5 text-[0.65rem] font-semibold tracking-wider text-muted-foreground uppercase">
+                    Hidden
+                  </span>
+                ) : null}
                 <span className="inline-flex items-center rounded-sm bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold tracking-wider text-primary uppercase">
                   {ws.sharedWith.length} Collaborator{ws.sharedWith.length !== 1 && 's'}
                 </span>
@@ -126,17 +138,19 @@ export default function WorkspacePage() {
             <div className="flex items-center gap-2">
               <button 
                 type="button"
-                title={ws.isHidden ? "Show in sidebar" : "Hide from sidebar"}
+                title={ws.isDefault ? "Default workspaces stay visible" : ws.isHidden ? "Show in sidebar" : "Hide from sidebar"}
                 onClick={() => handleToggleHide(ws.id)}
-                className={`flex size-10 items-center justify-center rounded-md border transition ${ws.isHidden ? 'border-border text-muted-foreground bg-muted/50' : 'border-transparent text-foreground hover:bg-muted'}`}
+                disabled={ws.isDefault}
+                className={`flex size-10 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-50 ${ws.isHidden ? 'border-border text-muted-foreground bg-muted/50' : 'border-transparent text-foreground hover:bg-muted'}`}
               >
                 <EyeIcon off={ws.isHidden} />
               </button>
               <button 
                 type="button"
-                title={ws.isDefault ? "Current Default" : "Set as Default"}
+                title={ws.isDefault ? "Current Default" : ws.isHidden ? "Show this workspace before making it default" : "Set as Default"}
                 onClick={() => handleSetDefault(ws.id)}
-                className={`flex size-10 items-center justify-center rounded-md border transition ${ws.isDefault ? 'border-amber-500/30 text-amber-500 bg-amber-500/10' : 'border-transparent text-muted-foreground hover:bg-muted'}`}
+                disabled={ws.isHidden}
+                className={`flex size-10 items-center justify-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-50 ${ws.isDefault ? 'border-amber-500/30 text-amber-500 bg-amber-500/10' : 'border-transparent text-muted-foreground hover:bg-muted'}`}
               >
                 <StarIcon filled={ws.isDefault} />
               </button>

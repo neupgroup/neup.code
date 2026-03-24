@@ -14,9 +14,14 @@ export default function WorkspaceDetail() {
   const router = useRouter();
   const params = useParams();
   const workspaceId = params.id as string;
-  const [workspace, setWorkspace] = useState<WorkspaceItem | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceItem | null>(() => {
+    const items = loadWorkspaces();
+    return items.find((ws) => ws.id === workspaceId) ?? null;
+  });
   const [shareEmail, setShareEmail] = useState("");
-  const [pageOrderBy, setPageOrderBy] = useState<PinnedPagesOrderBy>("custom");
+  const [pageOrderBy, setPageOrderBy] = useState<PinnedPagesOrderBy>(
+    () => loadPinnedPagesForWorkspace(workspaceId)?.orderBy ?? "custom",
+  );
 
   function createLocalId() {
     return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -25,15 +30,10 @@ export default function WorkspaceDetail() {
   }
 
   useEffect(() => {
-    const items = loadWorkspaces();
-    const found = items.find((ws) => ws.id === workspaceId);
-    if (!found) {
+    if (!workspace) {
       router.push("/workspace");
-    } else {
-      setWorkspace(found);
-      setPageOrderBy(loadPinnedPagesForWorkspace(workspaceId)?.orderBy ?? "custom");
     }
-  }, [router, workspaceId]);
+  }, [router, workspace]);
 
   if (!workspace) return null;
 
