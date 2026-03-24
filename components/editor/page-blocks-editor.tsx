@@ -7,9 +7,32 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type MutableRefObject,
 } from "react";
 import { ActionMenu, type ActionMenuItem } from "./action-menu";
+import {
+  type ActionMenuState,
+  type BlockActionContext,
+  type BlockActionTrigger,
+} from "./block-action-context";
+import * as blockActionUtils from "./block-actions";
+import {
+  canMoveBlock,
+  DRAG_START_THRESHOLD,
+  getMeasuredBlockSlotSize,
+  getReorderableBlocks,
+  type DragState,
+  type PendingDragState,
+  reorderPageBlocks,
+  siblingOffset,
+} from "./block-drag";
+import {
+  blockPlaceholder,
+  commandIdToKind,
+  getPageMeta,
+  headingEditorClassName,
+  isTextBlockKind,
+  slashCommandToKind,
+} from "./command-blocks";
 import { copyBlocksToClipboard as copyBlocksToClipboardBehavior } from "./behavior/copy-blocks";
 import { removeBlocksById } from "./behavior/cut-blocks";
 import { moveBlockInDirection } from "./behavior/move-block";
@@ -49,151 +72,33 @@ type FocusTarget = {
   position: "start" | "end";
 };
 
-type PageMeta = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  commands: SlashCommand[];
-};
-
 type StaticBlockMeta = {
   badge: string;
   title: string;
   description: string;
-  accentClassName: string;
 };
-
-type DragState = {
-  id: string;
-  startY: number;
-  currentY: number;
-  initialIndex: number;
-  targetIndex: number;
-  slotSize: number;
-};
-
-type PendingDragState = {
-  id: string;
-  startY: number;
-  initialIndex: number;
-  slotSize: number;
-};
-
-type DocActionTrigger = "slash" | "context";
-
-type ActionMenuState = {
-  x: number;
-  y: number;
-  blockId: string;
-  showTextActions: boolean;
-  trigger: DocActionTrigger;
-};
-
-type DocActionContext = {
-  block: WorkspacePageBlock;
-  blockIndex: number;
-  showTextActions: boolean;
-  trigger: DocActionTrigger;
-};
-
-type DocActionDefinition = {
-  id: string;
-  label: string;
-  description?: string;
-  keywords?: string[];
-  sectionTitle: string;
-  triggers: DocActionTrigger[];
-  tone?: "default" | "danger";
-  isVisible?: (context: DocActionContext) => boolean;
-  isDisabled?: (context: DocActionContext) => boolean;
-};
-
-const TEXT_BLOCK_KINDS: WorkspacePageBlockKind[] = ["note", "heading1", "heading2", "heading3"];
 const PAGE_KEYS: WorkspacePageKey[] = ["bridge"];
-const DRAG_START_THRESHOLD = 6;
-
-const PAGE_META: Record<WorkspacePageKey, PageMeta> = {
-  bridge: {
-    eyebrow: "Bridge",
-    title: "Bridge",
-    description: "Capture APIs, webhooks, sections, and notes in one shared document editor.",
-    commands: [
-      {
-        id: "p",
-        label: "Paragraph",
-        description: "Standard text block",
-        keywords: ["p", "paragraph", "text"],
-      },
-      {
-        id: "chapter",
-        label: "Page",
-        description: "Create a nested page block",
-        keywords: ["page", "chapter", "section"],
-      },
-      {
-        id: "h1",
-        label: "Heading 1",
-        description: "Large section heading",
-        keywords: ["h1", "#", "heading"],
-      },
-      {
-        id: "h2",
-        label: "Heading 2",
-        description: "Medium section heading",
-        keywords: ["h2", "##", "heading"],
-      },
-      {
-        id: "h3",
-        label: "Heading 3",
-        description: "Small section heading",
-        keywords: ["h3", "###", "heading"],
-      },
-      {
-        id: "api",
-        label: "API block",
-        description: "Insert an API bridge block",
-        keywords: ["api", "http", "request"],
-      },
-      {
-        id: "webhook",
-        label: "Webhook block",
-        description: "Insert a webhook bridge block",
-        keywords: ["webhook", "hook"],
-      },
-      {
-        id: "grpc",
-        label: "gRPC block",
-        description: "Insert a gRPC bridge block",
-        keywords: ["grpc", "rpc"],
-      },
-    ],
-  },
-};
 
 const STATIC_BLOCK_META: Record<Exclude<WorkspacePageBlockKind, "note" | "heading1" | "heading2" | "heading3">, StaticBlockMeta> = {
   chapter: {
     badge: "Page",
     title: "Page block",
     description: "Use this to create a nested page inside the doc.",
-    accentClassName: "border-sky-200 bg-sky-50/70 text-sky-900",
   },
   api: {
     badge: "API",
     title: "API block",
     description: "Placeholder for an API endpoint, request flow, or integration note.",
-    accentClassName: "border-emerald-200 bg-emerald-50/70 text-emerald-900",
   },
   webhook: {
     badge: "Webhook",
     title: "Webhook block",
     description: "Placeholder for an incoming or outgoing webhook definition.",
-    accentClassName: "border-amber-200 bg-amber-50/70 text-amber-900",
   },
   grpc: {
     badge: "gRPC",
     title: "gRPC block",
     description: "Placeholder for a gRPC service, method, or contract note.",
-    accentClassName: "border-violet-200 bg-violet-50/70 text-violet-900",
   },
 };
 
@@ -240,53 +145,6 @@ function ensureTrailingNote(blocks: WorkspacePageBlock[], pageKey: WorkspacePage
     return [...blocks, createBlock(pageKey, "note")];
   }
   return blocks;
-}
-
-function isTextBlockKind(kind: WorkspacePageBlockKind) {
-  return TEXT_BLOCK_KINDS.includes(kind);
-}
-
-function slashCommandToKind(pageKey: WorkspacePageKey, command: string) {
-  if (command === "/p") return "note";
-  if (command === "/h1" || command === "#") return "heading1";
-  if (command === "/h2" || command === "##") return "heading2";
-  if (command === "/h3" || command === "###") return "heading3";
-
-  if (pageKey === "bridge") {
-    if (command === "/chapter") return "chapter";
-    if (command === "/api") return "api";
-    if (command === "/webhook") return "webhook";
-    if (command === "/grpc") return "grpc";
-  }
-
-  return null;
-}
-
-function commandIdToKind(pageKey: WorkspacePageKey, commandId: string) {
-  if (commandId === "p") return "note";
-  if (commandId === "h1") return "heading1";
-  if (commandId === "h2") return "heading2";
-  if (commandId === "h3") return "heading3";
-
-  if (pageKey === "bridge" && (commandId === "chapter" || commandId === "api" || commandId === "webhook" || commandId === "grpc")) {
-    return commandId;
-  }
-
-  return null;
-}
-
-function headingEditorClassName(kind: WorkspacePageBlockKind) {
-  if (kind === "heading1") return "text-[1.55rem] font-semibold tracking-[-0.02em] leading-[1.2]";
-  if (kind === "heading2") return "text-[1.25rem] font-semibold tracking-[-0.018em] leading-[1.3]";
-  if (kind === "heading3") return "text-[1.06rem] font-semibold tracking-[-0.012em] leading-[1.4]";
-  return "";
-}
-
-function blockPlaceholder(kind: WorkspacePageBlockKind) {
-  if (kind === "heading1") return "Heading 1";
-  if (kind === "heading2") return "Heading 2";
-  if (kind === "heading3") return "Heading 3";
-  return "Continue typing, or type / for commands";
 }
 
 function findPreviousTextBlock(blocks: WorkspacePageBlock[], currentIndex: number) {
@@ -777,65 +635,18 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
   const actionMenuBlock = actionMenuState
     ? blocks.find((block) => block.id === actionMenuState.blockId)
     : null;
-  const docActionDefinitions: DocActionDefinition[] = [
-    {
-      id: "cut",
-      label: "Cut",
-      sectionTitle: "Block",
-      triggers: ["context"],
-    },
-    {
-      id: "copy-link",
-      label: "Copy link",
-      sectionTitle: "Block",
-      triggers: ["context"],
-    },
-    {
-      id: "move-up",
-      label: "Move up",
-      sectionTitle: "Block",
-      triggers: ["context"],
-      isDisabled: (context) => !canMoveBlock(blocks, context.blockIndex, "up"),
-    },
-    {
-      id: "move-down",
-      label: "Move down",
-      sectionTitle: "Block",
-      triggers: ["context"],
-      isDisabled: (context) => !canMoveBlock(blocks, context.blockIndex, "down"),
-    },
-    {
-      id: "bold",
-      label: "Bold",
-      sectionTitle: "Style",
-      triggers: ["context"],
-      isVisible: (context) => context.showTextActions && isTextBlockKind(context.block.kind),
-    },
-    {
-      id: "italic",
-      label: "Italic",
-      sectionTitle: "Style",
-      triggers: ["context"],
-      isVisible: (context) => context.showTextActions && isTextBlockKind(context.block.kind),
-    },
-    {
-      id: "underline",
-      label: "Underline",
-      sectionTitle: "Style",
-      triggers: ["context"],
-      isVisible: (context) => context.showTextActions && isTextBlockKind(context.block.kind),
-    },
-    ...getAddActionDefinitions(pageKey).map((definition) => ({
-      ...definition,
-      triggers: ["slash", "context"] as DocActionTrigger[],
-    })),
-  ];
+  const blockActionDefinitions = blockActionUtils.getBlockActionDefinitions({
+    blocks,
+    canMoveBlock,
+    isTextBlockKind,
+    pageKey,
+  });
 
   function getActionContext(
     block: WorkspacePageBlock,
-    trigger: DocActionTrigger,
+    trigger: BlockActionTrigger,
     showTextActions = false,
-  ): DocActionContext {
+  ): BlockActionContext {
     return {
       block,
       blockIndex: blocks.findIndex((item) => item.id === block.id),
@@ -846,40 +657,19 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
 
   function getActionMenuItems(
     block: WorkspacePageBlock,
-    trigger: DocActionTrigger,
+    trigger: BlockActionTrigger,
     showTextActions = false,
   ): ActionMenuItem[] {
     const context = getActionContext(block, trigger, showTextActions);
-
-    return docActionDefinitions
-      .filter((definition) => definition.triggers.includes(trigger))
-      .filter((definition) => definition.isVisible?.(context) ?? true)
-      .map((definition) => ({
-        id: definition.id,
-        label: definition.label,
-        description: definition.description,
-        sectionTitle: definition.sectionTitle,
-        tone: definition.tone,
-        disabled: definition.isDisabled?.(context) ?? false,
-      }));
+    return blockActionUtils.getActionMenuItems(blockActionDefinitions, context);
   }
 
   function getSlashCommands(block: WorkspacePageBlock): SlashCommand[] {
     const context = getActionContext(block, "slash");
-
-    return docActionDefinitions
-      .filter((definition) => definition.triggers.includes("slash"))
-      .filter((definition) => definition.isVisible?.(context) ?? true)
-      .map((definition) => ({
-        id: definition.id,
-        label: definition.label,
-        description: definition.description,
-        keywords: definition.keywords,
-        sectionTitle: definition.sectionTitle,
-      }));
+    return blockActionUtils.getSlashCommands(blockActionDefinitions, context);
   }
 
-  function runDocAction(actionId: string, context: DocActionContext) {
+  function runDocAction(actionId: string, context: BlockActionContext) {
     if (actionId === "cut") {
       return handleCut(context.block.id);
     }
@@ -1196,7 +986,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
                 actionMenuState.trigger,
                 actionMenuState.showTextActions,
               );
-              const definition = docActionDefinitions.find((action) => action.id === item.id);
+              const definition = blockActionDefinitions.find((action) => action.id === item.id);
 
               if (!definition) return;
               void runDocAction(definition.id, context);
@@ -1481,77 +1271,6 @@ function getBlockAnchorId(blockId: string) {
   return `page-block-${blockId}`;
 }
 
-function getContextMenuAddLabel(command: SlashCommand) {
-  if (command.id === "p") return "P block";
-  if (command.id === "h1") return "H1 block";
-  if (command.id === "h2") return "H2 block";
-  if (command.id === "h3") return "H3 block";
-  return command.label.toLowerCase().includes("block") ? command.label : `${command.label} block`;
-}
-
-function reorderPageBlocks(
-  items: WorkspacePageBlock[],
-  sourceId: string,
-  targetIndex: number,
-) {
-  const sourceIndex = items.findIndex((item) => item.id === sourceId);
-  if (sourceIndex === -1) return items;
-
-  const nextItems = [...items];
-  const [movedItem] = nextItems.splice(sourceIndex, 1);
-  if (!movedItem) return items;
-  nextItems.splice(targetIndex, 0, movedItem);
-  return nextItems;
-}
-
-function siblingOffset(index: number, dragState: DragState) {
-  const distance = dragState.slotSize;
-
-  if (dragState.initialIndex < dragState.targetIndex) {
-    if (index > dragState.initialIndex && index <= dragState.targetIndex) {
-      return -distance;
-    }
-  } else if (dragState.initialIndex > dragState.targetIndex) {
-    if (index >= dragState.targetIndex && index < dragState.initialIndex) {
-      return distance;
-    }
-  }
-
-  return 0;
-}
-
-function getMeasuredBlockSlotSize(
-  blocks: WorkspacePageBlock[],
-  index: number,
-  itemRefs: MutableRefObject<Record<string, HTMLDivElement | null>>,
-) {
-  const block = blocks[index];
-  const element = block ? itemRefs.current[block.id] : null;
-
-  if (!block || !element) {
-    return 0;
-  }
-
-  const currentRect = element.getBoundingClientRect();
-  const nextBlock = index < blocks.length - 1 ? blocks[index + 1] : null;
-  const nextElement = nextBlock ? itemRefs.current[nextBlock.id] : null;
-
-  if (nextElement) {
-    const nextRect = nextElement.getBoundingClientRect();
-    return Math.max(nextRect.top - currentRect.top, currentRect.height);
-  }
-
-  const previousBlock = index > 0 ? blocks[index - 1] : null;
-  const previousElement = previousBlock ? itemRefs.current[previousBlock.id] : null;
-
-  if (previousElement) {
-    const previousRect = previousElement.getBoundingClientRect();
-    return Math.max(currentRect.top - previousRect.top, currentRect.height);
-  }
-
-  return currentRect.height;
-}
-
 function isModifierSelection(event: { ctrlKey: boolean; metaKey: boolean }) {
   return event.ctrlKey || event.metaKey;
 }
@@ -1560,87 +1279,6 @@ function hasActiveTextSelection() {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed) return false;
   return (selection.toString() ?? "").trim().length > 0;
-}
-
-function getReorderableBlocks(blocks: WorkspacePageBlock[]) {
-  return blocks.filter((block, index) => !isTrailingEmptyNoteBlock(blocks, block, index));
-}
-
-function getAddActionDefinitions(pageKey: WorkspacePageKey) {
-  const baseActions: Array<Pick<DocActionDefinition, "id" | "description" | "keywords"> & {
-    label: string;
-  }> = [
-    {
-      id: "p",
-      label: "P block",
-      description: "Standard text block",
-      keywords: ["p", "paragraph", "text"],
-    },
-    {
-      id: "h1",
-      label: "H1 block",
-      description: "Large section heading",
-      keywords: ["h1", "#", "heading"],
-    },
-    {
-      id: "h2",
-      label: "H2 block",
-      description: "Medium section heading",
-      keywords: ["h2", "##", "heading"],
-    },
-    {
-      id: "h3",
-      label: "H3 block",
-      description: "Small section heading",
-      keywords: ["h3", "###", "heading"],
-    },
-  ];
-
-  if (pageKey === "bridge") {
-    baseActions.splice(1, 0, {
-      id: "chapter",
-      label: getContextMenuAddLabel({ id: "chapter", label: "Page" }),
-      description: "Create a nested page block",
-      keywords: ["page", "chapter", "section"],
-    });
-    baseActions.push(
-      {
-        id: "api",
-        label: "API block",
-        description: "Insert an API bridge block",
-        keywords: ["api", "http", "request"],
-      },
-      {
-        id: "webhook",
-        label: "Webhook block",
-        description: "Insert a webhook bridge block",
-        keywords: ["webhook", "hook"],
-      },
-      {
-        id: "grpc",
-        label: "gRPC block",
-        description: "Insert a gRPC bridge block",
-        keywords: ["grpc", "rpc"],
-      },
-    );
-  }
-
-  return baseActions.map((action) => ({
-    ...action,
-    sectionTitle: "Add",
-  }));
-}
-
-function getPageMeta(pageKey: WorkspacePageKey, chapterBridge: BridgeItem | null): PageMeta {
-  if (!chapterBridge) {
-    return PAGE_META[pageKey];
-  }
-
-  return {
-    ...PAGE_META.bridge,
-    title: chapterBridge.name || "Untitled page",
-    description: "Capture APIs, webhooks, sections, and notes in one shared document editor.",
-  };
 }
 
 function bridgeItemToPageBlock(item: BridgeItem): WorkspacePageBlock {
@@ -1767,40 +1405,4 @@ async function copyTextToClipboard(value: string) {
   textarea.select();
   document.execCommand("copy");
   document.body.removeChild(textarea);
-}
-
-function canMoveBlock(
-  blocks: WorkspacePageBlock[],
-  currentIndex: number,
-  direction: "up" | "down",
-) {
-  if (direction === "up") {
-    return currentIndex > 0;
-  }
-
-  if (currentIndex < 0 || currentIndex >= blocks.length - 1) {
-    return false;
-  }
-
-  const currentBlock = blocks[currentIndex];
-  const lastBlock = blocks[blocks.length - 1];
-
-  if (
-    currentBlock &&
-    currentBlock.kind !== "note" &&
-    lastBlock?.kind === "note" &&
-    currentIndex === blocks.length - 2
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function isTrailingEmptyNoteBlock(
-  blocks: WorkspacePageBlock[],
-  block: WorkspacePageBlock,
-  index: number,
-) {
-  return index === blocks.length - 1 && block.kind === "note" && !richTextHasContent(block.content);
 }
