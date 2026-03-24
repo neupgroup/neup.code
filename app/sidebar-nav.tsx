@@ -57,8 +57,6 @@ const sidebarGroups: SidebarGroup[] = [
     title: "Main",
     links: [
       { href: "/home", label: "Home", icon: "home" },
-      { href: "/editor", label: "Editor", icon: "page" },
-      { href: "/blocks", label: "Blocks", icon: "bridge" },
       { href: "/inbox", label: "Inbox", icon: "inbox" },
     ],
   },
@@ -82,9 +80,9 @@ function isActivePath(currentPathname: string, currentDocId: string | null, href
     return currentPathname === "/home" || currentPathname === "/";
   }
 
-  if (href === "/blocks") {
+  if (href === "/doc") {
     return (
-      (currentPathname === "/blocks" && !currentDocId) ||
+      (currentPathname === "/doc" && !currentDocId) ||
       currentPathname === "/bridge" ||
       currentPathname.startsWith("/bridge/")
     );
@@ -496,8 +494,8 @@ export function SidebarNav() {
                     pinnedPages.find((item) => item.workspaceId === ws.id) ?? null,
                   ).map((page) => {
                     const href = getPageDocHref(page.id);
-                    const isExplicitlyActive = (pathname === "/blocks" && docId === page.id);
-                    const isDocContext = pathname === "/blocks" || pathname.startsWith("/bridge");
+                    const isExplicitlyActive = pathname === "/doc" && docId === page.id;
+                    const isDocContext = pathname === "/doc" || pathname.startsWith("/bridge");
                     const isAccessedRoot = isDocContext && accessedFrom?.[2] === href;
                     const isActive = isExplicitlyActive || isAccessedRoot;
 

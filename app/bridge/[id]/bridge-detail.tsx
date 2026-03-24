@@ -697,7 +697,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
     const targetHref = getChapterDocHref(bridge.id);
     const currentSearch = typeof window !== "undefined" ? window.location.search : "";
     const isOnTargetRoute =
-      pathname === "/blocks" &&
+      pathname === "/doc" &&
       new URLSearchParams(currentSearch).get("id") === bridge.id &&
       new URLSearchParams(currentSearch).get("block") === "chapter";
 

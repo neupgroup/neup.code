@@ -109,7 +109,7 @@ export function ImportWorkspace() {
 
       if (!sanitizedWorkspacePageBlocks.length && hasLegacyDocBridgeData(parsed.bridges)) {
         throw new Error(
-          "This export uses the previous document format and cannot be edited in the current /blocks workspace. Re-export it from the latest version of Neup.Code before importing.",
+          "This export uses the previous document format and cannot be edited in the current /doc workspace. Re-export it from the latest version of Neup.Code before importing.",
         );
       }
 

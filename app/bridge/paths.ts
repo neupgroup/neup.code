@@ -1,11 +1,11 @@
 import type { BridgeItem } from "./bridge-storage";
 
 export function getBridgeDocRootHref() {
-  return "/blocks";
+  return "/doc";
 }
 
 export function getPageDocHref(id: string) {
-  return `/blocks?id=${id}`;
+  return `/doc?id=${id}`;
 }
 
 export function getChapterDocHref(id: string) {
