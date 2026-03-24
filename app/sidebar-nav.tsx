@@ -319,9 +319,13 @@ export function SidebarNav() {
       const items = loadWorkspaces();
       setWorkspaces(items);
       setExpandedWorkspaceId((prev) => {
-        if (prev !== undefined) return prev;
-        const def = items.find(w => w.isDefault);
-        return def ? def.id : null;
+        const defaultWorkspaceId = items.find((workspace) => workspace.isDefault)?.id ?? null;
+
+        if (prev === undefined) return defaultWorkspaceId;
+        if (prev === null) return null;
+
+        const hasExpandedWorkspace = items.some((workspace) => workspace.id === prev && !workspace.isHidden);
+        return hasExpandedWorkspace ? prev : defaultWorkspaceId;
       });
     }
     syncWorkspace();
