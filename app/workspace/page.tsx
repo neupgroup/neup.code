@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { loadWorkspaces, saveWorkspaces, type WorkspaceItem, WORKSPACE_STORAGE_EVENT } from "./workspace-storage";
+import {
+  createDefaultWorkspace,
+  loadWorkspaces,
+  saveWorkspaces,
+  type WorkspaceItem,
+  WORKSPACE_STORAGE_EVENT,
+} from "./workspace-storage";
 
 function EyeIcon({ off }: { off?: boolean }) {
   if (off) {
@@ -35,14 +41,7 @@ export default function WorkspacePage() {
     function sync() {
       const items = loadWorkspaces();
       if (items.length === 0) {
-        const defaultWorkspace: WorkspaceItem = {
-          id: "default",
-          name: "Personal Workspace",
-          description: "Your default profile workspace.",
-          createdAt: new Date().toISOString(),
-          sharedWith: [],
-          isDefault: true,
-        };
+        const defaultWorkspace: WorkspaceItem = createDefaultWorkspace();
         saveWorkspaces([defaultWorkspace]);
         setWorkspaces([defaultWorkspace]);
       } else {

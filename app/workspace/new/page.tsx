@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { loadWorkspaces, saveWorkspaces, type WorkspaceItem } from "../workspace-storage";
+import {
+  createWorkspaceId,
+  loadWorkspaces,
+  saveWorkspaces,
+  type WorkspaceItem,
+} from "../workspace-storage";
 
 export default function NewWorkspacePage() {
   const router = useRouter();
@@ -16,9 +21,7 @@ export default function NewWorkspacePage() {
 
     const workspaces = loadWorkspaces();
     const newWorkspace: WorkspaceItem = {
-      id: typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      id: createWorkspaceId(),
       name: newWorkspaceName.trim(),
       description: newWorkspaceDesc.trim(),
       createdAt: new Date().toISOString(),
