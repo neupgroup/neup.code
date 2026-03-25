@@ -9,6 +9,7 @@ import {
   saveWorkspaces,
   type WorkspaceItem,
 } from "../workspace-storage";
+import { seedDefaultPageForWorkspace } from "../defaultPage_en";
 
 export default function NewWorkspacePage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function NewWorkspacePage() {
     };
 
     saveWorkspaces([...workspaces, newWorkspace]);
+    seedDefaultPageForWorkspace(newWorkspace.id);
     router.push("/workspace");
   }
 

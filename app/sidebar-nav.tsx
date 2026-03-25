@@ -353,23 +353,6 @@ export function SidebarNav() {
       const rootPages = currentBridges.filter(
         (item) => (item.entryKind ?? "bridge") === "chapter" && !item.parentChapterId,
       );
-
-      if (rootPages.length === 0) {
-        const nextIndexPage: BridgeItem = {
-          id: createLocalId(),
-          name: "Index",
-          entryKind: "chapter",
-          bridgeType: "api",
-          endpoint: "",
-          environment: "development",
-          createdAt: new Date().toISOString(),
-        };
-        const nextBridges = [nextIndexPage, ...currentBridges];
-        saveBridges(nextBridges);
-        setNotePages([nextIndexPage]);
-        return;
-      }
-
       setNotePages(rootPages);
     }
 

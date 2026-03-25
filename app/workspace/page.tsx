@@ -9,6 +9,7 @@ import {
   type WorkspaceItem,
   WORKSPACE_STORAGE_EVENT,
 } from "./workspace-storage";
+import { seedDefaultPageForWorkspace } from "./defaultPage_en";
 
 function EyeIcon({ off }: { off?: boolean }) {
   if (off) {
@@ -43,6 +44,7 @@ export default function WorkspacePage() {
       if (items.length === 0) {
         const defaultWorkspace: WorkspaceItem = createDefaultWorkspace();
         saveWorkspaces([defaultWorkspace]);
+        seedDefaultPageForWorkspace(defaultWorkspace.id);
         setWorkspaces([defaultWorkspace]);
       } else {
         setWorkspaces(items);
