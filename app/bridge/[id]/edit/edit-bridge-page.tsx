@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { BRIDGE_STORAGE_KEY, loadBridges, type BridgeItem } from "../../bridge-storage";
+import { useSyncExternalStore } from "react";
+import { PageNotFoundView } from "@/components/page-not-found-view";
+import { BRIDGE_STORAGE_EVENT, BRIDGE_STORAGE_KEY, loadBridges, type BridgeItem } from "../../bridge-storage";
 import { NewBridgeForm } from "../../new/new-bridge-form";
 import { getBridgeDocRootHref } from "../../paths";
 
@@ -11,25 +11,12 @@ type EditBridgePageProps = {
 };
 
 export function EditBridgePage({ id }: EditBridgePageProps) {
-  const [bridge, setBridge] = useState<BridgeItem | null>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const allBridges = loadBridges();
-    setBridge(allBridges.find((item) => item.id === id) ?? null);
-    setReady(true);
-  }, [id]);
-
-  useEffect(() => {
-    function onStorage(event: StorageEvent) {
-      if (event.key !== BRIDGE_STORAGE_KEY) return;
-      const allBridges = loadBridges();
-      setBridge(allBridges.find((item) => item.id === id) ?? null);
-    }
-
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [id]);
+  const ready = useSyncExternalStore(subscribeToHydrationState, getHydrationSnapshot, getServerHydrationSnapshot);
+  const bridge = useSyncExternalStore(
+    subscribeToBridgeChanges,
+    () => getBridgeSnapshot(id),
+    () => null,
+  );
 
   if (!ready) {
     return (
@@ -40,26 +27,41 @@ export function EditBridgePage({ id }: EditBridgePageProps) {
   }
 
   if (!bridge) {
-    return (
-      <section>
-        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Bridge
-        </p>
-        <h1 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.02em]">
-          Bridge not found
-        </h1>
-        <p className="mt-2 text-[0.9rem] text-muted-foreground">
-          We could not find this bridge in browser storage.
-        </p>
-        <Link
-          href={getBridgeDocRootHref()}
-          className="mt-4 inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
-        >
-          Back to bridge
-        </Link>
-      </section>
-    );
+    return <PageNotFoundView href={getBridgeDocRootHref()} ctaLabel="Back to Bridge" />;
   }
 
   return <NewBridgeForm mode="edit" bridge={bridge} />;
+}
+
+function subscribeToBridgeChanges(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  function onStorage(event: StorageEvent) {
+    if (event.key && event.key !== BRIDGE_STORAGE_KEY) return;
+    onStoreChange();
+  }
+
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(BRIDGE_STORAGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(BRIDGE_STORAGE_EVENT, onStoreChange);
+  };
+}
+
+function getBridgeSnapshot(id: string): BridgeItem | null {
+  return loadBridges().find((item) => item.id === id) ?? null;
+}
+
+function subscribeToHydrationState() {
+  return () => {};
+}
+
+function getHydrationSnapshot() {
+  return true;
+}
+
+function getServerHydrationSnapshot() {
+  return false;
 }

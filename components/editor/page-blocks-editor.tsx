@@ -76,6 +76,7 @@ import {
   type WorkspacePageBlockKind,
   type WorkspacePageKey,
 } from "../../app/page-blocks-storage";
+import { PageNotFoundView } from "../page-not-found-view";
 
 type FocusTarget = {
   id: string;
@@ -210,6 +211,11 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     subscribeToPageBlocks,
     () => getPageBlocksSnapshot(pageKey),
     () => SERVER_PAGE_BLOCKS_SNAPSHOT[pageKey],
+  );
+  const isHydrated = useSyncExternalStore(
+    subscribeToHydrationState,
+    getHydrationSnapshot,
+    getServerHydrationSnapshot,
   );
   const bridges = useSyncExternalStore(
     subscribeToBridges,
@@ -978,6 +984,18 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     setFocusedTarget({ id: nextBlock.id, position: "start" });
   }
 
+  if (chapterId && !isHydrated) {
+    return (
+      <section>
+        <p className="text-[0.9rem] text-muted-foreground">Loading page...</p>
+      </section>
+    );
+  }
+
+  if (chapterId && isHydrated && !chapterBridge) {
+    return <PageNotFoundView href="/doc" ctaLabel="Return to Doc" />;
+  }
+
   return (
     <section className="space-y-6">
       <div>
@@ -1170,6 +1188,18 @@ function subscribeToBridges(onStoreChange: () => void) {
     window.removeEventListener("storage", handleStorage);
     window.removeEventListener(BRIDGE_STORAGE_EVENT, handleBridgeUpdate);
   };
+}
+
+function subscribeToHydrationState() {
+  return () => {};
+}
+
+function getHydrationSnapshot() {
+  return true;
+}
+
+function getServerHydrationSnapshot() {
+  return false;
 }
 
 function savePageBlocksFor(pageKey: WorkspacePageKey, pageBlocks: WorkspacePageBlock[]) {

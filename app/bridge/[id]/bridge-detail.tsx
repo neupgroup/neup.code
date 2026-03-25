@@ -23,6 +23,7 @@ import {
 } from "../bridge-storage";
 import { InlineNoteBlock, type InlineNoteSplit, type SlashCommand } from "@/components/editor/inline-note-block";
 import { normalizeRichTextHtml, richTextHasContent, richTextToPlainText } from "../rich-text";
+import { PageNotFoundView } from "@/components/page-not-found-view";
 import {
   BRIDGE_SESSION_STORAGE_KEY,
   clearBridgeClipboard,
@@ -1021,25 +1022,7 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   }
 
   if (!bridge) {
-    return (
-      <section>
-        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Bridge
-        </p>
-        <h1 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.02em]">
-          Bridge not found
-        </h1>
-        <p className="mt-2 text-[0.9rem] text-muted-foreground">
-          This bridge does not exist in browser storage.
-        </p>
-        <Link
-          href={getBridgeDocRootHref()}
-          className="mt-4 inline-flex rounded-full border border-border px-4 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.06em] transition hover:bg-muted"
-        >
-          Back to bridge
-        </Link>
-      </section>
-    );
+    return <PageNotFoundView href={getBridgeDocRootHref()} ctaLabel="Back to Bridge" />;
   }
 
   const backHref = parentBridge ? getChapterDocHref(parentBridge.id) : getBridgeDocRootHref();
