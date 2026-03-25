@@ -37,6 +37,7 @@ type InlineNoteBlockProps = {
   enterBehavior?: "split" | "lineBreak";
   autoFocus?: boolean;
   autoFocusPosition?: "start" | "end";
+  autoFocusTextOffset?: number | null;
   onAutoFocusComplete?: () => void;
   onSplit?: (split: InlineNoteSplit) => void;
   onBackspaceAtStart?: () => void;
@@ -100,6 +101,7 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
   enterBehavior = "split",
   autoFocus = false,
   autoFocusPosition = "end",
+  autoFocusTextOffset = null,
   onAutoFocusComplete,
   onSplit,
   onBackspaceAtStart,
@@ -286,15 +288,20 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
   useEffect(() => {
     if (!autoFocus || !editorRef.current) return;
 
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editorRef.current);
-    range.collapse(autoFocusPosition === "start");
-    selection?.removeAllRanges();
-    selection?.addRange(range);
+    if (typeof autoFocusTextOffset === "number") {
+      setSelectionAtTextOffset(editorRef.current, autoFocusTextOffset);
+    } else {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editorRef.current);
+      range.collapse(autoFocusPosition === "start");
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+
     editorRef.current.focus();
     onAutoFocusComplete?.();
-  }, [autoFocus, autoFocusPosition, onAutoFocusComplete]);
+  }, [autoFocus, autoFocusPosition, autoFocusTextOffset, onAutoFocusComplete]);
 
   const syncValue = useCallback(() => {
     const nextValue = normalizeRichTextHtml(editorRef.current?.innerHTML ?? "");
@@ -610,6 +617,58 @@ function getActiveTextFormats(): TextFormatState {
   };
 }
 
+function setSelectionAtTextOffset(editor: HTMLDivElement, targetOffset: number) {
+  const selection = window.getSelection();
+  if (!selection) return false;
+
+  const range = document.createRange();
+  const normalizedOffset = Math.max(0, targetOffset);
+  let remainingOffset = normalizedOffset;
+  const walker = document.createTreeWalker(
+    editor,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+        if ((node as HTMLElement).tagName === "BR") return NodeFilter.FILTER_ACCEPT;
+        return NodeFilter.FILTER_SKIP;
+      },
+    },
+  );
+
+  let currentNode = walker.nextNode();
+  while (currentNode) {
+    if (currentNode.nodeType === Node.TEXT_NODE) {
+      const textLength = currentNode.textContent?.length ?? 0;
+      if (remainingOffset <= textLength) {
+        range.setStart(currentNode, remainingOffset);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+      }
+      remainingOffset -= textLength;
+    } else if ((currentNode as HTMLElement).tagName === "BR") {
+      if (remainingOffset <= 1) {
+        range.setStartAfter(currentNode);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+      }
+      remainingOffset -= 1;
+    }
+
+    currentNode = walker.nextNode();
+  }
+
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
 function getActiveSlashQuery(editor: HTMLDivElement | null, triggerRange: Range | null) {
   if (!editor || !triggerRange) return null;
 
@@ -709,7 +768,9 @@ function getSplitAtSelection(
   afterRange.setStart(range.endContainer, range.endOffset);
 
   const beforeHtml = normalizeRichTextHtml(fragmentToHtml(beforeRange.cloneContents()));
-  const afterHtml = normalizeRichTextHtml(fragmentToHtml(afterRange.cloneContents()));
+  const afterHtml = normalizeRichTextHtml(fragmentToHtml(afterRange.cloneContents()), {
+    preserveLeadingWhitespace: true,
+  });
 
   return {
     beforeHtml,

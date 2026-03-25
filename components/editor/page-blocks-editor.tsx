@@ -79,7 +79,8 @@ import {
 
 type FocusTarget = {
   id: string;
-  position: "start" | "end";
+  position: "start" | "end" | "offset";
+  textOffset?: number;
 };
 
 type StaticBlockMeta = {
@@ -952,8 +953,13 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       )
       .filter((block) => block.id !== blockId);
 
+    const previousContentLength = richTextToPlainText(previousBlock.content).length;
     saveCurrentPageBlocks(nextBlocks);
-    setFocusedTarget({ id: previousBlock.id, position: "end" });
+    setFocusedTarget({
+      id: previousBlock.id,
+      position: "offset",
+      textOffset: previousContentLength,
+    });
   }
 
   function focusPreviousNote(blockId: string) {

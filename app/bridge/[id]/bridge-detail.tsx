@@ -350,7 +350,8 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
   const [isDeletingChapterBlocks, setIsDeletingChapterBlocks] = useState(false);
   const [focusedChildNoteTarget, setFocusedChildNoteTarget] = useState<{
     id: string;
-    position: "start" | "end";
+    position: "start" | "end" | "offset";
+    textOffset?: number;
   } | null>(null);
   const [runRecord, setRunRecord] = useState<BridgeRunRecord>({
     bridgeId: id,
@@ -647,9 +648,14 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
       )
       .filter((item) => item.id !== noteId);
 
+    const previousContentLength = richTextToPlainText(previousContent).length;
     persistChapterBridges(nextBridges);
     deleteBridgeRun(noteId);
-    setFocusedChildNoteTarget({ id: previousBlock.id, position: "end" });
+    setFocusedChildNoteTarget({
+      id: previousBlock.id,
+      position: "offset",
+      textOffset: previousContentLength,
+    });
   }
 
   useEffect(() => {
@@ -1257,7 +1263,14 @@ export function BridgeDetail({ id }: BridgeDetailProps) {
                         onChange={(value) => updateChildNoteContent(block.id, value)}
                         placeholder={textBlockPlaceholder(block.entryKind)}
                         autoFocus={focusedChildNoteTarget?.id === block.id}
-                        autoFocusPosition={focusedChildNoteTarget?.position ?? "end"}
+                        autoFocusPosition={
+                          focusedChildNoteTarget?.position === "start" ? "start" : "end"
+                        }
+                        autoFocusTextOffset={
+                          focusedChildNoteTarget?.position === "offset"
+                            ? focusedChildNoteTarget.textOffset ?? null
+                            : null
+                        }
                         onAutoFocusComplete={() => setFocusedChildNoteTarget(null)}
                         onSplit={(split) => handleChildTextBlockSplit(block.id, split)}
                         onBackspaceAtStart={() => mergeChildNoteBackward(block.id)}

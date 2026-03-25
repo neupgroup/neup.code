@@ -6,7 +6,8 @@ import { BlockRowShell, BlockSurface } from "./row-shell";
 
 type FocusTarget = {
   id: string;
-  position: "start" | "end";
+  position: "start" | "end" | "offset";
+  textOffset?: number;
 } | null;
 
 type TextBlockRowProps = {
@@ -91,7 +92,10 @@ export function TextBlockRow({
             onChange={onChange}
             placeholder={placeholder}
             autoFocus={focusedTarget?.id === block.id}
-            autoFocusPosition={focusedTarget?.position ?? "end"}
+            autoFocusPosition={focusedTarget?.position === "start" ? "start" : "end"}
+            autoFocusTextOffset={
+              focusedTarget?.position === "offset" ? focusedTarget.textOffset ?? null : null
+            }
             onAutoFocusComplete={onAutoFocusComplete}
             onSplit={onSplit}
             onBackspaceAtStart={onBackspaceAtStart}

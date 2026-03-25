@@ -1,4 +1,7 @@
 const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "BR", "DIV", "P"]);
+type NormalizeRichTextOptions = {
+  preserveLeadingWhitespace?: boolean;
+};
 
 function sanitizeNode(node: Node, doc: Document) {
   if (node.nodeType === Node.TEXT_NODE) return;
@@ -28,23 +31,29 @@ function sanitizeNode(node: Node, doc: Document) {
   }
 }
 
-export function normalizeRichTextHtml(html: string) {
+export function normalizeRichTextHtml(
+  html: string,
+  options: NormalizeRichTextOptions = {},
+) {
   const trimmed = html.trim();
   if (!trimmed) return "";
   if (typeof window === "undefined") return trimmed;
 
   const parser = new window.DOMParser();
-  const doc = parser.parseFromString(`<div>${trimmed}</div>`, "text/html");
+  const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
   const root = doc.body.firstElementChild as HTMLElement | null;
 
   if (!root) return "";
 
   sanitizeNode(root, doc);
 
+  if (options.preserveLeadingWhitespace) {
+    preserveLeadingWhitespace(root, doc);
+  }
+
   return root.innerHTML
     .replace(/<div><br><\/div>/gi, "<br>")
-    .replace(/<p><br><\/p>/gi, "<br>")
-    .trim();
+    .replace(/<p><br><\/p>/gi, "<br>");
 }
 
 export function richTextHasContent(html: string) {
@@ -75,4 +84,34 @@ export function richTextToMarkdown(html: string) {
     .replace(/<[^>]+>/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function preserveLeadingWhitespace(root: HTMLElement, doc: Document) {
+  const firstTextNode = getBoundaryTextNode(root, "start", doc);
+  if (!firstTextNode || !firstTextNode.textContent) return;
+
+  firstTextNode.textContent = firstTextNode.textContent.replace(/^ +/g, (spaces) =>
+    "\u00a0".repeat(spaces.length),
+  );
+}
+
+function getBoundaryTextNode(
+  root: HTMLElement,
+  direction: "start" | "end",
+  doc: Document,
+) {
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  return direction === "start" ? walker.nextNode() : getLastTextNode(walker);
+}
+
+function getLastTextNode(walker: TreeWalker) {
+  let lastNode: Node | null = null;
+  let currentNode = walker.nextNode();
+
+  while (currentNode) {
+    lastNode = currentNode;
+    currentNode = walker.nextNode();
+  }
+
+  return lastNode;
 }
