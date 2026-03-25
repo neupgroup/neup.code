@@ -31,6 +31,10 @@ type TextBlockRowProps = {
     event: MouseEvent<HTMLElement>,
     details?: { hasSelection: boolean; hasContent: boolean; activeTextFormats: TextFormatState },
   ) => void;
+  onTextSelectionChange?: (details: {
+    activeTextFormats: TextFormatState;
+    anchorRect: { left: number; right: number; top: number; bottom: number };
+  } | null) => void;
   onModifierSelect: (blockId: string) => void;
   onNavigateNext: () => void;
   onNavigatePrevious: () => void;
@@ -57,6 +61,7 @@ export function TextBlockRow({
   onBeforeModifierSelect,
   onChange,
   onContextMenu,
+  onTextSelectionChange,
   onModifierSelect,
   onNavigateNext,
   onNavigatePrevious,
@@ -97,6 +102,7 @@ export function TextBlockRow({
             onSelectCommand={onSelectCommand}
             maxVisibleCommands={4}
             onContextMenu={(event, details) => onContextMenu(event, details)}
+            onTextSelectionChange={onTextSelectionChange}
           />
         </BlockSurface>
       </div>

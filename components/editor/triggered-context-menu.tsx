@@ -5,7 +5,7 @@ import {
   type ContextMenuItem,
 } from "./context-menu-interface";
 
-export type ContextMenuTriggerKind = "slash" | "right-click";
+export type ContextMenuTriggerKind = "slash" | "right-click" | "selection";
 
 type TriggeredContextMenuProps = {
   trigger: ContextMenuTriggerKind;
@@ -46,7 +46,7 @@ export const TriggeredContextMenu = forwardRef<HTMLDivElement, TriggeredContextM
           activeItemId={activeItemId}
           itemRefs={itemRefs}
           maxVisibleItems={maxVisibleItems}
-          onDismiss={onDismiss}
+          onDismiss={trigger === "selection" ? undefined : onDismiss}
           onSelectItem={onSelectItem}
         />
       </div>

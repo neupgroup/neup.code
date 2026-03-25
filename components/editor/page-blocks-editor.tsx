@@ -201,6 +201,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
   const noteBlockRefs = useRef<Record<string, InlineNoteBlockHandle | null>>({});
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
+  const selectionMenuTimerRef = useRef<number | null>(null);
   const pendingDragRef = useRef<PendingDragState | null>(null);
   const suppressClickRef = useRef(false);
 
@@ -250,7 +251,19 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
   }, [blocks, chapterId, pageKey]);
 
   useEffect(() => {
+    return () => {
+      if (selectionMenuTimerRef.current !== null) {
+        window.clearTimeout(selectionMenuTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     function closeActionMenu() {
+      if (selectionMenuTimerRef.current !== null) {
+        window.clearTimeout(selectionMenuTimerRef.current);
+        selectionMenuTimerRef.current = null;
+      }
       setActionMenuState(null);
       setContextSelectedBlockId(null);
     }
@@ -269,6 +282,10 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     }
 
     function onScroll(event: Event) {
+      if (actionMenuState?.trigger === "selection") {
+        return;
+      }
+
       const target = event.target;
       if (
         actionMenuRef.current &&
@@ -288,17 +305,15 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     }
 
     window.addEventListener("pointerdown", clearContextSelection, true);
-    window.addEventListener("click", closeActionMenu);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("keydown", onEscape);
 
     return () => {
       window.removeEventListener("pointerdown", clearContextSelection, true);
-      window.removeEventListener("click", closeActionMenu);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("keydown", onEscape);
     };
-  }, []);
+  }, [actionMenuState?.trigger]);
 
   useEffect(() => {
     if (!actionMenuState || !actionMenuRef.current) return;
@@ -307,14 +322,27 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       if (!actionMenuRef.current || !actionMenuState) return;
 
       const viewportPadding = 12;
+      const gap = 10;
       const menuRect = actionMenuRef.current.getBoundingClientRect();
-      const left = Math.max(
+      let left = actionMenuState.x;
+      let top = actionMenuState.y;
+
+      if (actionMenuState.trigger === "selection") {
+        left = actionMenuState.x - menuRect.width / 2;
+        top = actionMenuState.y - menuRect.height - gap;
+
+        if (top < viewportPadding) {
+          top = (actionMenuState.anchorBottom ?? actionMenuState.y) + gap;
+        }
+      }
+
+      left = Math.max(
         viewportPadding,
-        Math.min(actionMenuState.x, window.innerWidth - menuRect.width - viewportPadding),
+        Math.min(left, window.innerWidth - menuRect.width - viewportPadding),
       );
-      const top = Math.max(
+      top = Math.max(
         viewportPadding,
-        Math.min(actionMenuState.y, window.innerHeight - menuRect.height - viewportPadding),
+        Math.min(top, window.innerHeight - menuRect.height - viewportPadding),
       );
 
       setActionMenuPosition({ left, top });
@@ -442,6 +470,47 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       activeTextFormats,
       trigger: "context",
     });
+  }
+
+  function openSelectionMenu(
+    block: WorkspacePageBlock,
+    details: {
+      activeTextFormats: TextFormatState;
+      anchorRect: { left: number; right: number; top: number; bottom: number };
+    } | null,
+  ) {
+    if (selectionMenuTimerRef.current !== null) {
+      window.clearTimeout(selectionMenuTimerRef.current);
+      selectionMenuTimerRef.current = null;
+    }
+
+    if (!details || !isTextBlockKind(block.kind)) {
+      setActionMenuState((current) =>
+        current?.trigger === "selection" && current.blockId === block.id ? null : current,
+      );
+      return;
+    }
+
+    const centerX = details.anchorRect.left + (details.anchorRect.right - details.anchorRect.left) / 2;
+    const nextSelectionMenuState: ActionMenuState = {
+      x: centerX,
+      y: details.anchorRect.top,
+      anchorBottom: details.anchorRect.bottom,
+      blockId: block.id,
+      showTextActions: true,
+      activeTextFormats: details.activeTextFormats,
+      trigger: "selection",
+    };
+
+    if (actionMenuState?.trigger === "selection" && actionMenuState.blockId === block.id) {
+      setActionMenuState(nextSelectionMenuState);
+      return;
+    }
+
+    selectionMenuTimerRef.current = window.setTimeout(() => {
+      setActionMenuState(nextSelectionMenuState);
+      selectionMenuTimerRef.current = null;
+    }, 500);
   }
 
   function persistBlockKind(blockId: string, kind: WorkspacePageBlockKind, content = "") {
@@ -938,7 +1007,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       </div>
 
       <div className="grid gap-1.5 pt-1">
-        {blocks.map((block) => {
+      {blocks.map((block) => {
           const reorderIndex = reorderableBlockIds.indexOf(block.id);
           const isDragged = dragState?.id === block.id;
           const isSelected =
@@ -981,6 +1050,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
                     details?.activeTextFormats ?? EMPTY_TEXT_FORMAT_STATE,
                   )
                 }
+                onTextSelectionChange={(details) => openSelectionMenu(block, details)}
                 onModifierSelect={toggleBlockSelection}
                 onNavigateNext={() => focusNextNote(block.id)}
                 onNavigatePrevious={() => focusPreviousNote(block.id)}
@@ -1032,7 +1102,7 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
       {actionMenuState && actionMenuBlock ? (
         <TriggeredContextMenu
           ref={actionMenuRef}
-          trigger="right-click"
+          trigger={actionMenuState.trigger === "selection" ? "selection" : "right-click"}
           className="w-[264px]"
           position={actionMenuPosition}
           items={actionMenuItems}

@@ -26,26 +26,26 @@ export function getRightClickCommandDefinitions({
       id: "cut",
       label: "Cut",
       sectionTitle: "Block",
-      triggers: ["context"],
+      triggers: ["context", "selection"],
     },
     {
       id: "copy-link",
       label: "Copy link",
       sectionTitle: "Block",
-      triggers: ["context"],
+      triggers: ["context", "selection"],
     },
     {
       id: "move-up",
       label: "Move up",
       sectionTitle: "Block",
-      triggers: ["context"],
+      triggers: ["context", "selection"],
       isDisabled: (context) => !canMoveBlock(blocks, context.blockIndex, "up"),
     },
     {
       id: "move-down",
       label: "Move down",
       sectionTitle: "Block",
-      triggers: ["context"],
+      triggers: ["context", "selection"],
       isDisabled: (context) => !canMoveBlock(blocks, context.blockIndex, "down"),
     },
     {
@@ -53,7 +53,7 @@ export function getRightClickCommandDefinitions({
       label: "Bold",
       compactLabel: "B",
       sectionTitle: "Style",
-      triggers: ["context"],
+      triggers: ["context", "selection"],
       menuLayout: "grid",
       isVisible: (context) =>
         context.showTextActions && isTextBlockKind(context.block.kind),
@@ -64,7 +64,7 @@ export function getRightClickCommandDefinitions({
       label: "Italic",
       compactLabel: "I",
       sectionTitle: "Style",
-      triggers: ["context"],
+      triggers: ["context", "selection"],
       menuLayout: "grid",
       isVisible: (context) =>
         context.showTextActions && isTextBlockKind(context.block.kind),
@@ -75,7 +75,7 @@ export function getRightClickCommandDefinitions({
       label: "Underline",
       compactLabel: "U",
       sectionTitle: "Style",
-      triggers: ["context"],
+      triggers: ["context", "selection"],
       menuLayout: "grid",
       isVisible: (context) =>
         context.showTextActions && isTextBlockKind(context.block.kind),
@@ -93,7 +93,7 @@ export function getRightClickMenuItems(
   context: BlockActionContext,
 ): ContextMenuItem[] {
   return definitions
-    .filter((definition) => definition.triggers.includes("context"))
+    .filter((definition) => definition.triggers.includes(context.trigger))
     .filter((definition) => definition.isVisible?.(context) ?? true)
     .map((definition) => ({
       id: definition.id,

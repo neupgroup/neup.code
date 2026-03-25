@@ -53,6 +53,10 @@ type InlineNoteBlockProps = {
       activeTextFormats: TextFormatState;
     },
   ) => void;
+  onTextSelectionChange?: (details: {
+    activeTextFormats: TextFormatState;
+    anchorRect: { left: number; right: number; top: number; bottom: number };
+  } | null) => void;
 };
 
 export type InlineNoteBlockHandle = {
@@ -105,6 +109,7 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
   onSelectCommand,
   maxVisibleCommands,
   onContextMenu,
+  onTextSelectionChange,
 }, ref) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -241,6 +246,42 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
       document.removeEventListener("selectionchange", syncSlashQueryFromSelection);
     };
   }, [dismissSlashMenu, value]);
+
+  useEffect(() => {
+    if (!onTextSelectionChange) return;
+
+    function reportTextSelection() {
+      const selectionRange = getEditorSelectionRange(editorRef.current);
+      savedSelectionRef.current = selectionRange;
+
+      if (!selectionRange || selectionRange.collapsed) {
+        onTextSelectionChange(null);
+        return;
+      }
+
+      const rect = getRangeRect(selectionRange);
+      if (!rect) {
+        onTextSelectionChange(null);
+        return;
+      }
+
+      onTextSelectionChange({
+        activeTextFormats: getActiveTextFormats(),
+        anchorRect: {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+        },
+      });
+    }
+
+    document.addEventListener("selectionchange", reportTextSelection);
+
+    return () => {
+      document.removeEventListener("selectionchange", reportTextSelection);
+    };
+  }, [onTextSelectionChange]);
 
   useEffect(() => {
     if (!autoFocus || !editorRef.current) return;

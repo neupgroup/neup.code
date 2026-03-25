@@ -93,13 +93,11 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
                   type="button"
                   disabled={item.disabled}
                   onMouseDown={(event) => {
-                    if (item.interaction !== "mousedown") return;
                     event.preventDefault();
                     void onSelectItem?.(item, event);
                   }}
                   onClick={(event) => {
-                    if (item.interaction === "mousedown") return;
-                    void onSelectItem?.(item, event);
+                    event.preventDefault();
                   }}
                   className={`flex h-11 items-center justify-center rounded-lg border text-[1rem] transition ${
                     item.active || activeItemId === item.id

@@ -1,6 +1,6 @@
 import type { WorkspacePageBlock } from "../../app/page-blocks-storage";
 
-export type BlockActionTrigger = "slash" | "context";
+export type BlockActionTrigger = "slash" | "context" | "selection";
 export type TextFormat = "bold" | "italic" | "underline";
 export type TextFormatState = Record<TextFormat, boolean>;
 
@@ -17,6 +17,7 @@ export type ActionMenuState = {
   showTextActions: boolean;
   activeTextFormats: TextFormatState;
   trigger: BlockActionTrigger;
+  anchorBottom?: number;
 };
 
 export type BlockActionContext = {
