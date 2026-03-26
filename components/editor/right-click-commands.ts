@@ -81,9 +81,9 @@ export function getRightClickCommandDefinitions({
         context.showTextActions && isTextBlockKind(context.block.kind),
       isActive: (context) => context.activeTextFormats.underline,
     },
-    ...getAddActionDefinitions(pageKey).map((definition) => ({
+    ...getAddActionDefinitions(pageKey).map((definition): BlockCommandDefinition => ({
       ...definition,
-      triggers: ["context"] as const,
+      triggers: ["context"],
     })),
   ];
 }

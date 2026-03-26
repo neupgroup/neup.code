@@ -251,23 +251,24 @@ export const InlineNoteBlock = forwardRef<InlineNoteBlockHandle, InlineNoteBlock
 
   useEffect(() => {
     if (!onTextSelectionChange) return;
+    const reportSelectionChange = onTextSelectionChange;
 
     function reportTextSelection() {
       const selectionRange = getEditorSelectionRange(editorRef.current);
       savedSelectionRef.current = selectionRange;
 
       if (!selectionRange || selectionRange.collapsed) {
-        onTextSelectionChange(null);
+        reportSelectionChange(null);
         return;
       }
 
       const rect = getRangeRect(selectionRange);
       if (!rect) {
-        onTextSelectionChange(null);
+        reportSelectionChange(null);
         return;
       }
 
-      onTextSelectionChange({
+      reportSelectionChange({
         activeTextFormats: getActiveTextFormats(),
         anchorRect: {
           left: rect.left,

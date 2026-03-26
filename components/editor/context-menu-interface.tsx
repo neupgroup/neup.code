@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import type { CSSProperties, MouseEvent, MutableRefObject } from "react";
 
 export type ContextMenuItem = {
@@ -45,23 +45,22 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
         ? maxVisibleItems * 64 + Math.max(0, maxVisibleItems - 1) * 4
         : undefined;
 
-    useImperativeHandle(ref, () => rootRef.current, []);
-
     useEffect(() => {
       if (!onDismiss) return;
+      const dismiss = onDismiss;
 
       function handlePointerDown(event: PointerEvent) {
         const element = rootRef.current;
         const target = event.target;
         if (!element || !(target instanceof Node) || element.contains(target)) return;
-        onDismiss();
+        dismiss();
       }
 
       function handleFocusIn(event: FocusEvent) {
         const element = rootRef.current;
         const target = event.target;
         if (!element || !(target instanceof Node) || element.contains(target)) return;
-        onDismiss();
+        dismiss();
       }
 
       document.addEventListener("pointerdown", handlePointerDown);
@@ -75,7 +74,18 @@ export const ContextMenuInterface = forwardRef<HTMLDivElement, ContextMenuInterf
 
     return (
       <div
-        ref={rootRef}
+        ref={(element) => {
+          rootRef.current = element;
+
+          if (typeof ref === "function") {
+            ref(element);
+            return;
+          }
+
+          if (ref) {
+            ref.current = element;
+          }
+        }}
         className={`grid gap-1 rounded-xl border border-border bg-background p-1 shadow-[0_18px_50px_rgba(15,23,42,0.16)] ${className}`.trim()}
         style={style}
       >
