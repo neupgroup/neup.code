@@ -77,6 +77,7 @@ import {
   type WorkspacePageKey,
 } from "../../app/page-blocks-storage";
 import { PageNotFoundView } from "../page-not-found-view";
+import { trackRecentlyOpenedPage } from "../../app/recent-pages-storage";
 
 type FocusTarget = {
   id: string;
@@ -256,6 +257,11 @@ export function PageBlocksEditor({ pageKey, chapterId }: PageBlocksEditorProps) 
     if (chapterId) return;
     persistPageBlocksIfMissing(pageKey, blocks);
   }, [blocks, chapterId, pageKey]);
+
+  useEffect(() => {
+    if (!chapterId || !chapterBridge) return;
+    trackRecentlyOpenedPage(chapterBridge.id);
+  }, [chapterBridge, chapterId]);
 
   useEffect(() => {
     return () => {
